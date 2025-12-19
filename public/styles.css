@@ -1,0 +1,501 @@
+/* Dark theme inspired by Debian and Raspberry Pi with 8-bit styling */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+    --raspberry: #e3587b;
+    --raspberry-dark: #c23d5f;
+    --bg-primary: #0A0A0A;
+    --bg-secondary: #1A1A1A;
+    --bg-card: #202020;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B0B0B0;
+    --accent: #e3587b;
+    --gradient: linear-gradient(135deg, var(--raspberry-dark), var(--raspberry));
+    --pixel-size: 2px;
+    --cloud-color1: rgba(227, 88, 123, 0.12);
+    --cloud-color2: rgba(194, 61, 95, 0.15);
+}
+
+/* Base styles remain the same */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    scroll-behavior: smooth;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Enhanced 8-bit Mario-style cloud background */
+html::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        /* Main cloud shapes */
+        radial-gradient(ellipse at 50% 50%, var(--cloud-color1) 20%, transparent 70%),
+        radial-gradient(circle at 30% 30%, var(--cloud-color2) 25%, transparent 65%),
+        radial-gradient(ellipse at 70% 70%, var(--cloud-color1) 25%, transparent 60%),
+        /* Cloud details */
+        radial-gradient(circle at 40% 40%, var(--cloud-color1) 5%, transparent 25%),
+        radial-gradient(circle at 60% 60%, var(--cloud-color2) 5%, transparent 35%),
+        /* Pixel grid */
+        linear-gradient(90deg, transparent 50%, rgba(227, 88, 123, 0.03) 50%),
+        linear-gradient(0deg, transparent 50%, rgba(227, 88, 123, 0.03) 50%);
+    background-size: 
+        400px 200px,  /* Main cloud 1 */
+        300px 300px,  /* Main cloud 2 */
+        350px 175px,  /* Main cloud 3 */
+        100px 100px,  /* Detail 1 */
+        150px 150px,  /* Detail 2 */
+        var(--pixel-size) var(--pixel-size),  /* Pixel grid */
+        var(--pixel-size) var(--pixel-size);  /* Pixel grid */
+    background-position:
+        0% 20%,
+        100% 50%,
+        50% 80%,
+        30% 40%,
+        70% 60%,
+        0 0,
+        0 0;
+    animation: 
+        cloudFloat 40s linear infinite,
+        pixelate 3s linear infinite;
+    z-index: 0;
+    image-rendering: pixelated;
+}
+
+html::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        /* Background cloud layer */
+        radial-gradient(ellipse at 40% 60%, var(--cloud-color2) 25%, transparent 55%),
+        radial-gradient(circle at 60% 40%, var(--cloud-color1) 20%, transparent 50%),
+        radial-gradient(ellipse at 20% 80%, var(--cloud-color2) 15%, transparent 45%),
+        /* Cloud details */
+        radial-gradient(circle at 70% 30%, var(--cloud-color1) 5%, transparent 25%),
+        radial-gradient(circle at 30% 70%, var(--cloud-color2) 5%, transparent 30%);
+    background-size:
+        350px 175px,
+        300px 300px,
+        250px 125px,
+        100px 100px,
+        120px 120px;
+    background-position:
+        40% 60%,
+        60% 40%,
+        20% 80%,
+        70% 30%,
+        30% 70%;
+    animation: cloudFloatReverse 35s linear infinite;
+    z-index: 0;
+    image-rendering: pixelated;
+}
+
+@keyframes cloudFloat {
+    0% {
+        background-position:
+            0% 20%,
+            100% 50%,
+            50% 80%,
+            30% 40%,
+            70% 60%,
+            0 0,
+            0 0;
+    }
+    100% {
+        background-position:
+            100% 20%,
+            0% 50%,
+            150% 80%,
+            130% 40%,
+            170% 60%,
+            var(--pixel-size) var(--pixel-size),
+            var(--pixel-size) var(--pixel-size);
+    }
+}
+
+@keyframes cloudFloatReverse {
+    0% {
+        background-position:
+            40% 60%,
+            60% 40%,
+            20% 80%,
+            70% 30%,
+            30% 70%;
+    }
+    100% {
+        background-position:
+            140% 60%,
+            160% 40%,
+            120% 80%,
+            170% 30%,
+            130% 70%;
+    }
+}
+
+/* Rest of the CSS remains exactly the same */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+}
+
+/* Sections */
+section {
+    min-height: 100vh;
+    padding: 4rem 2rem;
+    position: relative;
+    background: transparent;
+    z-index: 2;
+}
+
+/* Typography with 8-bit touches */
+h1 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 3.5rem;
+    font-weight: 900;
+    line-height: 1.3;
+    margin-bottom: 2rem;
+    color: var(--text-primary);
+    text-shadow: 
+        var(--pixel-size) var(--pixel-size) 0 var(--raspberry),
+        calc(var(--pixel-size) * -1) calc(var(--pixel-size) * -1) 0 var(--raspberry-dark);
+    animation: textGlitch 3s infinite;
+}
+
+h2 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 2rem;
+    color: var(--raspberry);
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+h3 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+}
+
+p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+    line-height: 1.8;
+    animation: fadeIn 1s ease-out 0.3s backwards;
+}
+
+/* Content Sections */
+.section-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100vh - 8rem);
+}
+
+/* Feature Cards */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin: 3rem 0;
+    animation: fadeIn 1s ease-out 0.6s backwards;
+}
+
+.feature-card {
+    background: rgba(32, 32, 32, 0.8);
+    padding: 2rem;
+    border: var(--pixel-size) solid var(--raspberry);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 
+        var(--pixel-size) var(--pixel-size) 0 var(--raspberry),
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--raspberry-dark);
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.03));
+    pointer-events: none;
+}
+
+.feature-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--raspberry),
+        calc(var(--pixel-size) * 3) calc(var(--pixel-size) * 3) 0 var(--raspberry-dark);
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    color: var(--raspberry);
+    margin-bottom: 1.5rem;
+    text-shadow: var(--pixel-size) var(--pixel-size) 0 var(--raspberry-dark);
+}
+
+/* Buttons */
+.cta-buttons {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    animation: fadeIn 1s ease-out 0.9s backwards;
+}
+
+.button {
+    font-family: 'Press Start 2P', cursive;
+    display: inline-block;
+    padding: 1rem 2rem;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s step-end;
+    position: relative;
+    text-transform: uppercase;
+    border: var(--pixel-size) solid;
+}
+
+.button-primary {
+    background: var(--raspberry);
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+    box-shadow: 
+        var(--pixel-size) var(--pixel-size) 0 var(--text-primary),
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--raspberry-dark);
+}
+
+.button-secondary {
+    background: rgba(32, 32, 32, 0.5);
+    border-color: var(--raspberry);
+    color: var(--text-primary);
+    box-shadow: 
+        var(--pixel-size) var(--pixel-size) 0 var(--raspberry),
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--raspberry-dark);
+    backdrop-filter: blur(5px);
+}
+
+.button:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--accent),
+        calc(var(--pixel-size) * 3) calc(var(--pixel-size) * 3) 0 var(--raspberry-dark);
+}
+
+.button:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+/* Code Block */
+.code-block {
+    background: rgba(32, 32, 32, 0.8);
+    padding: 1.5rem;
+    margin: 2rem 0;
+    font-family: 'Press Start 2P', monospace;
+    position: relative;
+    border: var(--pixel-size) solid var(--raspberry);
+    animation: fadeIn 1s ease-out 0.6s backwards;
+    backdrop-filter: blur(10px);
+    box-shadow: 
+        var(--pixel-size) var(--pixel-size) 0 var(--raspberry),
+        calc(var(--pixel-size) * 2) calc(var(--pixel-size) * 2) 0 var(--raspberry-dark);
+}
+
+.code-block code {
+    color: var(--text-primary);
+    display: block;
+    line-height: 1.8;
+    font-size: 0.7rem;
+}
+
+.code-block .comment {
+    color: #6A737D;
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+    padding: 2rem;
+    background: rgba(26, 26, 26, 0.95);
+    text-align: center;
+    color: var(--text-secondary);
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.7rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(10px);
+    border-top: var(--pixel-size) solid var(--raspberry);
+}
+
+footer p {
+    margin: 0;
+    max-width: none;
+}
+
+footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+footer a:hover {
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+footer .hourglass {
+    color: var(--raspberry);
+    display: inline-block;
+    animation: rotate 2s steps(4) infinite;
+}
+
+/* 8-bit Animations */
+@keyframes textGlitch {
+    0%, 100% { text-shadow: var(--pixel-size) var(--pixel-size) 0 var(--raspberry); }
+    25% { text-shadow: calc(var(--pixel-size) * -1) var(--pixel-size) 0 var(--raspberry); }
+    50% { text-shadow: var(--pixel-size) calc(var(--pixel-size) * -1) 0 var(--raspberry); }
+    75% { text-shadow: calc(var(--pixel-size) * -1) calc(var(--pixel-size) * -1) 0 var(--raspberry); }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--raspberry);
+    border-radius: 0;
+    border: var(--pixel-size) solid var(--raspberry-dark);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    .section-content {
+        padding: 1rem;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cta-buttons {
+        flex-direction: column;
+    }
+
+    .button {
+        width: 100%;
+        text-align: center;
+        font-size: 0.8rem;
+        padding: 0.8rem 1.5rem;
+    }
+
+    section {
+        padding: 2rem 1rem;
+    }
+}
+
+/* New Elements and Animations */
+.new-elements img {
+    width: 100px;
+    height: auto;
+    position: absolute;
+    opacity: 0;
+    transition: opacity 1s ease-out, transform 1s ease-out;
+}
+
+.new-elements img.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.new-elements img:not(.visible) {
+    transform: translateY(20px);
+}
+
+/* General Animate-on-Scroll Styles */
+.animate-on-scroll {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 1s ease-out, transform 1s ease-out;
+}
+
+.animate-on-scroll.visible {
+    opacity: 1;
+    transform: translateY(0);
+}

@@ -1,4 +1,4 @@
-# 🚀 Firstb00t — Your Debian Server's First Safe Steps
+# 🚀 Firstb00t — your Debian server's first safe steps
 
 Welcome! **Firstb00t** is an automated security setup for your brand-new Debian server. 
 

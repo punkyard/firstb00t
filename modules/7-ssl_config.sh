@@ -138,42 +138,101 @@ EOF
 
 # 🔄 configure services
 configure_services() {
-    echo -e "${BLUE}🔄 configuration des services...${NC}"
+    echo -e "${BLUE}🔄 configuration des services (NIST SP 800-52)...${NC}"
     
-    # configure apache
+    # NIST SP 800-52 Rev 2: TLS 1.2+ with strong ciphers and PFS
+    STRONG_CIPHERS="ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
+    
+    # configure apache2
     if [ -f /etc/apache2/apache2.conf ]; then
-        cat > /etc/apache2/conf-available/ssl-params.conf << EOF
-SSLEngine on
-SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+        echo -e "${BLUE}🔒 hardening Apache2 (NIST SP 800-52)...${NC}"
+        cat > /etc/apache2/conf-available/ssl-hardening.conf << EOF
+# NIST SP 800-52 Rev 2 compliance
+# Disable weak protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
 SSLProtocol -all +TLSv1.2 +TLSv1.3
-SSLHonorCipherOrder off
+
+# Strong ciphers with Perfect Forward Secrecy (ECDHE/DHE first)
+SSLCipherSuite ${STRONG_CIPHERS}
+SSLHonorCipherOrder on
+
+# Disable session tickets (use only session IDs)
 SSLSessionTickets off
+
+# OCSP stapling for certificate validation
 SSLUseStapling on
 SSLStaplingCache "shmcb:logs/ssl_stapling(32768)"
-SSLOpenSSLConfCmd DHParameters "/etc/ssl/certs/dhparam.pem"
+SSLStaplingReturnResponderErrors off
+
+# HSTS: force browsers to use HTTPS (prevent downgrade attacks)
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+# X-Frame-Options: prevent clickjacking
+Header always set X-Frame-Options "DENY"
+
+# X-Content-Type-Options: prevent MIME type sniffing
+Header always set X-Content-Type-Options "nosniff"
+
+# Content-Security-Policy: defense against XSS/injection
+Header always set Content-Security-Policy "default-src 'self'; upgrade-insecure-requests"
 EOF
-        a2enconf ssl-params || handle_error "échec de l'activation de la configuration ssl" "configuration apache"
+        a2enconf ssl-hardening || handle_error "failed to enable Apache2 SSL hardening" "Apache2 configuration"
+        a2enmod headers || handle_error "failed to enable Apache2 headers module" "Apache2 configuration"
+        log_action "info: Apache2 TLS 1.2/1.3 hardening configured"
     fi
     
     # configure nginx
     if [ -f /etc/nginx/nginx.conf ]; then
-        cat > /etc/nginx/conf.d/ssl-params.conf << EOF
+        echo -e "${BLUE}🔒 hardening Nginx (NIST SP 800-52)...${NC}"
+        cat > /etc/nginx/conf.d/ssl-hardening.conf << EOF
+# NIST SP 800-52 Rev 2 compliance
+# Disable weak protocols (SSLv2, SSLv3, TLS 1.0, TLS 1.1)
 ssl_protocols TLSv1.2 TLSv1.3;
+
+# Strong ciphers with Perfect Forward Secrecy (ECDHE/DHE)
+ssl_ciphers '${STRONG_CIPHERS}';
 ssl_prefer_server_ciphers on;
-ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+
+# Session management (no tickets, use session cache)
 ssl_session_cache shared:SSL:10m;
 ssl_session_timeout 1d;
 ssl_session_tickets off;
+
+# OCSP stapling
 ssl_stapling on;
 ssl_stapling_verify on;
 resolver 8.8.8.8 8.8.4.4 valid=300s;
 resolver_timeout 5s;
+
+# DH parameters for DHE ciphers
 ssl_dhparam /etc/ssl/certs/dhparam.pem;
+
+# HSTS: force browsers to use HTTPS (prevent downgrade attacks)
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+# X-Frame-Options: prevent clickjacking
+add_header X-Frame-Options "DENY" always;
+
+# X-Content-Type-Options: prevent MIME type sniffing
+add_header X-Content-Type-Options "nosniff" always;
+
+# Content-Security-Policy: defense against XSS/injection
+add_header Content-Security-Policy "default-src 'self'; upgrade-insecure-requests" always;
 EOF
-        nginx -t || handle_error "configuration nginx invalide" "configuration nginx"
+        nginx -t || handle_error "invalid Nginx configuration" "Nginx configuration"
+        log_action "info: Nginx TLS 1.2/1.3 hardening configured"
     fi
     
-    log_action "info : configuration des services effectuée"
+    # configure postfix (SMTP TLS mandatory)
+    if [ -f /etc/postfix/main.cf ]; then
+        echo -e "${BLUE}🔒 hardening Postfix (SMTP TLS mandatory)...${NC}"
+        # Ensure mandatory TLS for submission (enforce in master.cf)
+        postconf -e "smtpd_tls_security_level=encrypt" || handle_error "failed to set Postfix TLS level" "Postfix configuration"
+        postconf -e "smtpd_tls_protocol=!SSLv2,!SSLv3,!TLSv1,!TLSv1.1" || handle_error "failed to disable weak TLS" "Postfix configuration"
+        postconf -e "smtp_tls_security_level=encrypt" || handle_error "failed to set outbound TLS" "Postfix configuration"
+        log_action "info: Postfix TLS 1.2+ mandatory encryption configured"
+    fi
+    
+    log_action "info: service TLS hardening completed (NIST SP 800-52)"
 }
 
 # 🎯 main function

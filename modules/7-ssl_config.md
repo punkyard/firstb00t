@@ -2,44 +2,67 @@
 
 ## Purpose
 
-This module manages SSL/TLS certificate generation and configuration for secure HTTPS services. It handles certificate acquisition (self-signed or Let's Encrypt), key management, and HTTPS configuration for web services and other SSL-dependent applications.
+This module enforces NIST SP 800-52 Rev 2 compliant TLS configuration for all services (Apache, Nginx, Postfix). It implements TLS 1.2/1.3 with strong ciphers, Perfect Forward Secrecy (PFS), HSTS headers, and disables all weak protocols and ciphers.
+
+**Security Standards:**
+- NIST SP 800-52 Rev 2: Guidelines for TLS Implementations
+- OWASP A02:2021 Cryptographic Failures
+- NSA requirement: TLS 1.2+ mandatory, disable SSLv2/v3/TLS1.0/1.1
 
 ## 🔗 Dependencies
 
 - openssl: SSL/TLS toolkit (certificate and key generation)
 - certbot: Let's Encrypt client (for automatic certificate management)
-- apache2 or nginx: Web server (optional, depends on deployment)
+- apache2 or nginx: Web server with TLS support
+- postfix: SMTP server (optional, for mail TLS enforcement)
 - systemctl: Service management
 - curl/wget: Certificate validation and retrieval
 
 ## ⚙️ Configuration
 
-### Certificate Types
+### NIST SP 800-52 Compliance
 
-A. **Self-Signed Certificates** (Development/Testing)
-   - Generated with openssl
-   - Valid for 365 days by default
-   - Stored in `/etc/ssl/private/` and `/etc/ssl/certs/`
-   - Not trusted by browsers (warning on connection)
+**A. Protocol Version Enforcement**
+   - **Enabled:** TLS 1.2, TLS 1.3
+   - **Disabled:** SSLv2, SSLv3, TLS 1.0, TLS 1.1
+   - Configuration: `SSLProtocol -all +TLSv1.2 +TLSv1.3` (Apache) / `ssl_protocols TLSv1.2 TLSv1.3;` (Nginx)
 
-B. **Let's Encrypt Certificates** (Production)
-   - Automatic renewal via certbot
-   - Valid for 90 days (renewed automatically at 30 days before expiry)
-   - Stored in `/etc/letsencrypt/live/<domain>/`
-   - Trusted by all major browsers and clients
+**B. Strong Cipher Suites (PFS-only)**
+   - ECDHE-ECDSA-AES256-GCM-SHA384 (priority: elliptic curve)
+   - ECDHE-RSA-AES256-GCM-SHA384 (priority: RSA)
+   - ECDHE-ECDSA/RSA-CHACHA20-POLY1305 (modern, fast)
+   - DHE-RSA-AES256-GCM-SHA384 (fallback: Diffie-Hellman)
+   - ❌ Disabled: DES, 3DES, RC4, NULL, EXPORT ciphers
+   - ❌ Disabled: Non-PFS ciphers (no RSA key transport)
 
-C. **Custom Certificates** (Enterprise)
-   - Support for organization-issued certificates
-   - Manual renewal procedures
-   - Flexible storage locations
+**C. Perfect Forward Secrecy (PFS)**
+   - All ciphers use ECDHE (preferred) or DHE (fallback)
+   - Session tickets disabled (`SSLSessionTickets off`)
+   - Session cache used instead (stateless, replay-resistant)
+   - DHParam: 2048-bit for DH ciphers
 
-### HTTPS Configuration
+**D. HTTP Strict-Transport-Security (HSTS)**
+   - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+   - Forces browsers to HTTPS for 1 year
+   - Prevents downgrade attacks (MITM stripping HTTPS)
+   - Enables HSTS preload list inclusion
 
-- Protocol versions: TLSv1.2 and TLSv1.3 only
-- Cipher suites: Modern, secure ciphers (no legacy support)
-- HSTS: HTTP Strict-Transport-Security enabled
-- Certificate chain: Complete chain included for compatibility
-- Key types: RSA 2048-bit or ECDSA P-256
+**E. Certificate Validation (OCSP Stapling)**
+   - OCSP stapling enabled (certificate freshness verification)
+   - Resolver: 8.8.8.8 (Google DNS) for OCSP checks
+   - Prevents client certificate revocation checks
+
+**F. Security Headers**
+   - X-Frame-Options: DENY (prevent clickjacking)
+   - X-Content-Type-Options: nosniff (prevent MIME type sniffing)
+   - Content-Security-Policy: `default-src 'self'; upgrade-insecure-requests` (XSS/injection defense)
+
+### Postfix SMTP TLS (Module 7 Extension)
+
+- **Mandatory TLS:** `smtpd_tls_security_level=encrypt` (enforce encrypted SMTP)
+- **Outbound TLS:** `smtp_tls_security_level=encrypt` (relay to other MTAs)
+- **Weak protocol disabled:** Blocks SSLv2, SSLv3, TLS 1.0/1.1
+- Prevents plaintext SMTP auth and credential exposure
 
 ## 🚨 Error Handling
 

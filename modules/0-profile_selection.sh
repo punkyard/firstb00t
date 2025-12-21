@@ -9,43 +9,43 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
-# 📋 module information
+# 📋 Module information
 MODULE_NAME="profile_selection"
 MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="sélection et configuration des profils de sécurité"
+MODULE_DESCRIPTION="security profile selection and configuration"
 MODULE_DEPENDENCIES=("systemctl" "apt")
 
-# 📝 logging function
+# 📝 Logging function
 log_action() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> /var/log/firstboot_script.log
 }
 
-# 🚨 error handling
+# 🚨 Error handling
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 erreur détectée à l'étape $error_step : $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
+    log_action "error: interruption at step $error_step: $error_message"
     cleanup
     exit 1
 }
 
-# 🧹 cleanup function
+# 🧹 Cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 Cleaning up...${NC}"
     # restore original config if needed
     if [ -f /etc/firstboot/profile.bak ]; then
         mv /etc/firstboot/profile.bak /etc/firstboot/profile
     fi
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
-# 🔄 check dependencies
+# 🔄 Check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 Checking dependencies...${NC}"
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
     echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
@@ -84,7 +84,34 @@ assess_system() {
     log_action "info : évaluation du système terminée"
 }
 
-# ⚙️ select profile
+# ⚙️ Configure SSH port
+configure_ssh_port() {
+    echo ""
+    echo "🔒 SSH Port Configuration"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Default port 22 is a common target for attacks."
+    echo "Standard secure port: 22022"
+    echo ""
+    read -p "Enter SSH port (default 22022): " ssh_port
+    
+    # Validate port
+    if [ -z "$ssh_port" ]; then
+        ssh_port="22022"
+    fi
+    
+    if ! [[ "$ssh_port" =~ ^[0-9]+$ ]] || [ "$ssh_port" -lt 1024 ] || [ "$ssh_port" -gt 65535 ]; then
+        echo "❌ Invalid port. Using default 22022"
+        ssh_port="22022"
+    fi
+    
+    # Export for SSH modules
+    export SSH_PORT="$ssh_port"
+    echo "$ssh_port" > /etc/firstboot/ssh_port
+    echo "✅ SSH port configured: ${ssh_port}"
+    log_action "info : SSH port configured to ${ssh_port}"
+}
+
+# ⚙️ Select profile
 select_profile() {
     echo -e "${BLUE}⚙️ sélection du profil...${NC}"
     
@@ -136,36 +163,39 @@ configure_profile() {
             # enable basic modules
             touch /etc/firstboot/modules/1-system_updates.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/9-monitoring.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/10-monitoring.enabled
             ;;
         "standard")
             # standard profile configuration
             echo -e "${BLUE}📦 configuration du profil standard...${NC}"
             # enable standard modules
             touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/5-fail2ban.enabled
-            touch /etc/firstboot/modules/6-ssl_config.enabled
-            touch /etc/firstboot/modules/7-dns_config.enabled
-            touch /etc/firstboot/modules/8-mail_config.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/6-fail2ban.enabled
+            touch /etc/firstboot/modules/7-ssl_config.enabled
+            touch /etc/firstboot/modules/8-dns_config.enabled
+            touch /etc/firstboot/modules/9-mail_config.enabled
             ;;
         "advanced")
             # advanced profile configuration
             echo -e "${BLUE}📦 configuration du profil advanced...${NC}"
             # enable all modules
             touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/5-fail2ban.enabled
-            touch /etc/firstboot/modules/6-ssl_config.enabled
-            touch /etc/firstboot/modules/7-dns_config.enabled
-            touch /etc/firstboot/modules/8-mail_config.enabled
-            touch /etc/firstboot/modules/9-monitoring.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/6-fail2ban.enabled
+            touch /etc/firstboot/modules/7-ssl_config.enabled
+            touch /etc/firstboot/modules/8-dns_config.enabled
+            touch /etc/firstboot/modules/9-mail_config.enabled
+            touch /etc/firstboot/modules/10-monitoring.enabled
             ;;
     esac
     
@@ -210,22 +240,28 @@ main() {
     log_action "info : étape 1 terminée"
 
     # step 2: select profile
-    update_progress 2 4
+    update_progress 2 5
     echo -e "${BLUE}📦 étape 2 : sélection du profil...${NC}"
     select_profile
     log_action "info : étape 2 terminée"
-
-    # step 3: configure profile
-    update_progress 3 4
-    echo -e "${BLUE}📦 étape 3 : configuration du profil...${NC}"
-    configure_profile
+    
+    # step 3: configure SSH port
+    update_progress 3 5
+    echo -e "${BLUE}📦 étape 3 : configuration du port SSH...${NC}"
+    configure_ssh_port
     log_action "info : étape 3 terminée"
 
-    # step 4: validate profile
-    update_progress 4 4
-    echo -e "${BLUE}📦 étape 4 : validation du profil...${NC}"
-    validate_profile
+    # step 4: configure profile
+    update_progress 4 5
+    echo -e "${BLUE}📦 étape 4 : configuration du profil...${NC}"
+    configure_profile
     log_action "info : étape 4 terminée"
+
+    # step 5: validate
+    update_progress 5 5
+    echo -e "${BLUE}📦 étape 5 : validation du profil...${NC}"
+    validate_profile
+    log_action "info : étape 5 terminée"
 
     echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
     log_action "succès : installation du module $MODULE_NAME terminée"

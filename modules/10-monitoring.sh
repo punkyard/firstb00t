@@ -11,23 +11,23 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
-# 📋 module information
+# 📋 Module information
 MODULE_NAME="monitoring"
 MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="configuration du monitoring système"
+MODULE_DESCRIPTION="system monitoring configuration"
 MODULE_DEPENDENCIES=("prometheus" "node_exporter" "systemctl" "curl")
 
-# 📝 logging function
+# 📝 Logging function
 log_action() {
     mkdir -p /var/log/firstboot
     echo "[$(date -Iseconds)] [${MODULE_NAME}] $1" | tee -a "/var/log/firstboot/${MODULE_NAME}.log"
 }
 
-# 🚨 error handling
+# 🚨 Error handling
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 erreur détectée à l'étape $error_step : $error_message${NC}"
+    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
     log_action "erreur : interruption à l'étape $error_step : $error_message"
     cleanup
     exit 1

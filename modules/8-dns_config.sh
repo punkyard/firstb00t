@@ -11,23 +11,23 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
-# 📋 module information
-MODULE_NAME="fail2ban"
+# 📋 Module information
+MODULE_NAME="dns_config"
 MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="installation et configuration de fail2ban"
-MODULE_DEPENDENCIES=("apt" "systemctl" "fail2ban-client")
+MODULE_DESCRIPTION="DNS server configuration"
+MODULE_DEPENDENCIES=("bind9" "systemctl" "named-checkconf")
 
-# 📝 logging function
+# 📝 Logging function
 log_action() {
     mkdir -p /var/log/firstboot
     echo "[$(date -Iseconds)] [${MODULE_NAME}] $1" | tee -a "/var/log/firstboot/${MODULE_NAME}.log"
 }
 
-# 🚨 error handling
+# 🚨 Error handling
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 erreur détectée à l'étape $error_step : $error_message${NC}"
+    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
     log_action "erreur : interruption à l'étape $error_step : $error_message"
     cleanup
     exit 1
@@ -37,11 +37,11 @@ handle_error() {
 cleanup() {
     echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
     # restore original config if needed
-    if [ -f /etc/fail2ban/jail.local.bak ]; then
-        mv /etc/fail2ban/jail.local.bak /etc/fail2ban/jail.local
-        log_action "info : configuration fail2ban restaurée"
+    if [ -f /etc/bind/named.conf.bak ]; then
+        mv /etc/bind/named.conf.bak /etc/bind/named.conf
+        log_action "info : configuration bind9 restaurée"
     fi
-    # leave fail2ban running; only restore config
+    # leave bind9 running; only restore config
     log_action "info : nettoyage effectué"
 }
 
@@ -64,117 +64,104 @@ update_progress() {
     echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
 }
 
-# 📦 install fail2ban
-install_fail2ban() {
-    echo -e "${BLUE}📦 installation de fail2ban...${NC}"
+# 📦 install bind9
+install_bind9() {
+    echo -e "${BLUE}📦 installation de bind9...${NC}"
     
     # check if already installed
-    if dpkg -s fail2ban >/dev/null 2>&1; then
-        log_action "info : fail2ban déjà installé"
-        echo -e "${GREEN}✅ fail2ban déjà installé${NC}"
+    if dpkg -s bind9 >/dev/null 2>&1; then
+        log_action "info : bind9 déjà installé"
+        echo -e "${GREEN}✅ bind9 déjà installé${NC}"
         return 0
     fi
     
     # update package list
     apt update || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
     
-    # install fail2ban
-    apt install -y fail2ban || handle_error "échec de l'installation de fail2ban" "installation"
+    # install bind9
+    apt install -y bind9 bind9utils bind9-doc || handle_error "échec de l'installation de bind9" "installation"
     
-    log_action "info : fail2ban installé"
+    log_action "info : bind9 installé"
 }
 
-# 🔒 configure fail2ban
-configure_fail2ban() {
-    echo -e "${BLUE}🔒 configuration de fail2ban...${NC}"
+# 🔒 configure bind9
+configure_bind9() {
+    echo -e "${BLUE}🔒 configuration de bind9...${NC}"
     
     # backup original config
-    cp /etc/fail2ban/jail.local /etc/fail2ban/jail.local.bak 2>/dev/null || true
+    cp /etc/bind/named.conf /etc/bind/named.conf.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
     
-    # create jail.local
-    cat > /etc/fail2ban/jail.local << EOF
-[DEFAULT]
-bantime = 3600
-findtime = 600
-maxretry = 3
-destemail = root@localhost
-sender = fail2ban@localhost
-action = %(action_mwl)s
+    # configure named.conf
+    cat > /etc/bind/named.conf << EOF
+options {
+    directory "/var/cache/bind";
+    recursion no;
+    allow-query { localhost; };
+    allow-transfer { none; };
+    allow-update { none; };
+    allow-notify { none; };
+    listen-on { 127.0.0.1; };
+    listen-on-v6 { ::1; };
+    forwarders {
+        8.8.8.8;
+        8.8.4.4;
+    };
+    forward only;
+    dnssec-validation auto;
+    auth-nxdomain no;
+    version "not available";
+};
 
-[sshd]
-enabled = true
-port = 22222
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+zone "." {
+    type hint;
+    file "/etc/bind/db.root";
+};
 
-[sshd-ddos]
-enabled = true
-port = 22222
-filter = sshd-ddos
-logpath = /var/log/auth.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+zone "localhost" {
+    type master;
+    file "/etc/bind/db.local";
+};
 
-[apache]
-enabled = true
-port = http,https
-filter = apache-auth
-logpath = /var/log/apache2/error.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+zone "127.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.127";
+};
 
-[apache-bad-requests]
-enabled = true
-port = http,https
-filter = apache-bad-requests
-logpath = /var/log/apache2/access.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+zone "0.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.0";
+};
 
-[postfix]
-enabled = true
-port = smtp,465,submission
-filter = postfix
-logpath = /var/log/mail.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+zone "255.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.255";
+};
 
-[dovecot]
-enabled = true
-port = pop3,pop3s,imap,imaps
-filter = dovecot
-logpath = /var/log/mail.log
-maxretry = 3
-findtime = 600
-bantime = 3600
+include "/etc/bind/named.conf.local";
 EOF
     
     # set permissions
-    chmod 644 /etc/fail2ban/jail.local || handle_error "échec de la définition des permissions" "définition des permissions"
+    chmod 644 /etc/bind/named.conf || handle_error "échec de la définition des permissions" "définition des permissions"
     
-    log_action "info : configuration de fail2ban effectuée"
+    log_action "info : configuration de bind9 effectuée"
 }
 
 # 🔄 restart service
 restart_service() {
-    echo -e "${BLUE}🔄 redémarrage du service fail2ban...${NC}"
+    echo -e "${BLUE}🔄 redémarrage du service bind9...${NC}"
+    
+    # check config
+    named-checkconf /etc/bind/named.conf || handle_error "configuration bind9 invalide" "vérification de la configuration"
     
     # restart service
-    systemctl restart fail2ban || handle_error "échec du redémarrage du service" "redémarrage du service"
+    systemctl restart bind9 || handle_error "échec du redémarrage du service" "redémarrage du service"
     
     # verify service status
-    if ! systemctl is-active --quiet fail2ban; then
-        handle_error "service fail2ban non actif" "vérification du service"
+    if ! systemctl is-active --quiet bind9; then
+        handle_error "service bind9 non actif" "vérification du service"
     fi
     
-    log_action "info : service fail2ban redémarré"
+    log_action "info : service bind9 redémarré"
 }
 
 # 🎯 main function
@@ -193,16 +180,16 @@ profile enablement
     # check dependencies
     check_dependencies
 
-    # step 1: install fail2ban
+    # step 1: install bind9
     update_progress 1 4
     echo -e "${BLUE}📦 étape 1 : installation...${NC}"
-    install_fail2ban
+    install_bind9
     log_action "info : étape 1 terminée"
 
-    # step 2: configure fail2ban
+    # step 2: configure bind9
     update_progress 2 4
     echo -e "${BLUE}📦 étape 2 : configuration...${NC}"
-    configure_fail2ban
+    configure_bind9
     log_action "info : étape 2 terminée"
 
     # step 3: restart service
@@ -216,13 +203,13 @@ profile enablement
     echo -e "${BLUE}📦 étape 4 : vérification...${NC}"
     
     # verify service
-    if ! systemctl is-active --quiet fail2ban; then
-        handle_error "service fail2ban non actif" "vérification"
+    if ! systemctl is-active --quiet bind9; then
+        handle_error "service bind9 non actif" "vérification"
     fi
     
-    # verify jails
-    if ! fail2ban-client status | grep -q "Status: active"; then
-        handle_error "fail2ban non actif" "vérification"
+    # verify dns resolution
+    if ! dig @127.0.0.1 localhost > /dev/null; then
+        handle_error "résolution dns locale échouée" "vérification"
     fi
     
     log_action "info : étape 4 terminée"

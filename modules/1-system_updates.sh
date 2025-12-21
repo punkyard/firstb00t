@@ -9,45 +9,45 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
-# 📋 module information
+# 📋 Module information
 MODULE_NAME="system_updates"
 MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="système de mise à jour automatique pour debian"
+MODULE_DESCRIPTION="automatic update system for Debian"
 MODULE_DEPENDENCIES=("apt" "apt-get")
 
-# 📝 logging function
+# 📝 Logging function
 log_action() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> /var/log/firstboot_script.log
 }
 
-# 🚨 error handling
+# 🚨 Error handling
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 erreur détectée à l'étape $error_step : $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
+    log_action "error: interruption at step $error_step: $error_message"
     cleanup
     exit 1
 }
 
-# 🧹 cleanup function
+# 🧹 Cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 Cleaning up...${NC}"
     # remove temporary files
     rm -f /tmp/apt-update-*
     # restore original sources if needed
     if [ -f /etc/apt/sources.list.bak ]; then
         mv /etc/apt/sources.list.bak /etc/apt/sources.list
     fi
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
-# 🔄 check dependencies
+# 🔄 Check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 Checking dependencies...${NC}"
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
     echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"

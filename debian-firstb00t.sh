@@ -44,7 +44,11 @@ echo "📦 début de l'installation des modules..."
     # installer le module de sélection de profil
     echo "� installation du module de sélection de profil..."
     source "modules/0-profile_selection.sh"
-
+    # Load SSH port configuration if available
+    if [ -f /etc/firstboot/ssh_port ]; then
+        export SSH_PORT=$(cat /etc/firstboot/ssh_port)
+        log_action "info : SSH port loaded: ${SSH_PORT}"
+    fi
     # installer les modules activés dans l'ordre
     for module in modules/*.sh; do
         if [ -f "$module" ]; then

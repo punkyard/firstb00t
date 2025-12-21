@@ -2,123 +2,122 @@
 
 ## 🎯 Purpose
 
-ce module gère la création d'un utilisateur sudo avec les privilèges appropriés. il assure que l'utilisateur est correctement configuré avec un mot de passe fort et les permissions nécessaires.
+This module manages creation of a sudo user with appropriate privileges. It ensures the user is properly configured with a strong password and necessary permissions.
 
 ## 🔗 Dependencies
 
-- useradd: création d'utilisateurs
-- usermod: modification d'utilisateurs
-- passwd: gestion des mots de passe
-- groupadd: création de groupes
+- useradd: user creation
+- usermod: user modification
+- passwd: password management
+- groupadd: group creation
 
 ## ⚙️ Configuration
 
-### Required Settings
+### Required settings
 
-- nom d'utilisateur: doit être unique
-- mot de passe: doit respecter les critères de sécurité
+- username: must be unique
+- password: must meet security criteria
 
-### Optional Settings
+### Optional settings
 
-- aucun paramètre optionnel
+- no optional parameters
 
-## 🚨 Error Handling
+## 🚨 Error handling
 
-### Common Errors
+### Common errors
 
-1. nom d'utilisateur vide
+A. empty username
+   - cause: empty user input
+   - solution: provide a valid username
+   - prevention: input validation
 
-   - cause: entrée utilisateur vide
-   - solution: fournir un nom d'utilisateur valide
-   - prevention: validation de l'entrée
-2. mot de passe trop faible
+B. password too weak
+   - cause: does not meet security criteria
+   - solution: use a stronger password
+   - prevention: password validation
 
-   - cause: ne respecte pas les critères de sécurité
-   - solution: utiliser un mot de passe plus fort
-   - prevention: validation du mot de passe
-3. échec de création d'utilisateur
+C. user creation failure
+   - cause: name conflict or insufficient permissions
+   - solution: use another name or check permissions
+   - prevention: preliminary verification
 
-   - cause: conflit de noms ou permissions insuffisantes
-   - solution: utiliser un autre nom ou vérifier les permissions
-   - prevention: vérification préalable
+### Recovery procedures
 
-### Recovery Procedures
-
-1. nettoyage en cas d'échec
-   - suppression de l'utilisateur partiellement créé
-   - suppression des fichiers temporaires
-2. restauration des permissions
-   - vérification des permissions du répertoire home
-   - vérification des permissions .ssh
-3. vérification
-   - confirmation de la suppression
-   - vérification de l'état du système
+A. cleanup on failure
+   - remove partially created user
+   - remove temporary files
+B. restore permissions
+   - verify home directory permissions
+   - verify .ssh permissions
+C. verify
+   - confirm deletion
+   - verify system status
 
 ## 🔄 Integration
 
 ### Input
 
-- entrée utilisateur pour le nom
-- entrée utilisateur pour le mot de passe
+- user input for name
+- user input for password
 
 ### Output
 
-- utilisateur créé avec sudo
-- répertoire .ssh configuré
-- permissions définies
+- user created with sudo
+- .ssh directory configured
+- permissions set
 
 ## 📊 Validation
 
-### Success Criteria
+### Success criteria
 
-- utilisateur existe dans /etc/passwd
-- utilisateur est dans le groupe sudo
-- répertoire .ssh existe avec les bonnes permissions
-- mot de passe est défini
+- user exists in /etc/passwd
+- user is in sudo group
+- .ssh directory exists with correct permissions
+- password is set
 
-### Performance Metrics
+### Performance metrics
 
-- temps de création de l'utilisateur
-- temps de configuration des permissions
-- taille du répertoire home
+- user creation time
+- permission configuration time
+- home directory size
 
 ## 🧹 Cleanup
 
-### Temporary Files
+### Temporary files
 
-- /tmp/user-*: fichiers temporaires
-- /etc/passwd.bak: sauvegarde du fichier passwd
-- /etc/group.bak: sauvegarde du fichier group
+- /tmp/user-*: temporary files
+- /etc/passwd.bak: passwd file backup
+- /etc/group.bak: group file backup
 
-### Configuration Files
+### Configuration files
 
-- /etc/passwd: informations utilisateur
-- /etc/group: informations de groupe
-- /etc/sudoers: configuration sudo
+- /etc/passwd: user information
+- /etc/group: group information
+- /etc/sudoers: sudo configuration
 
 ## 📝 Logging
 
-### Log Files
+### Log files
 
-- /var/log/firstboot_script.log: actions du module
-- /var/log/auth.log: actions d'authentification
+- /var/log/firstboot_script.log: module actions
+- /var/log/auth.log: authentication actions
 
-### Log Levels
+### Log levels
 
-- info: actions normales
-- erreur: problèmes détectés
-- succès: opérations réussies
+- info: normal actions
+- error: detected problems
+- success: successful operations
 
 ## 🔧 Maintenance
 
-### Regular Tasks
+### Regular tasks
 
-- vérification des permissions
-- vérification des groupes
-- vérification des mots de passe
+- verify permissions
+- verify groups
+- verify passwords
 
 ### Updates
 
-- mise à jour des critères de mot de passe
-- mise à jour des permissions
-- mise à jour des groupes
+- update password criteria
+- update permissions
+- update groups

@@ -2,7 +2,11 @@
 
 ## Purpose
 
-This module configures UFW (Uncomplicated Firewall) with security-appropriate rules based on the selected deployment profile. It enables the firewall and establishes inbound/outbound rules for SSH, HTTP, HTTPS, and other essential services.
+This module configures UFW (Uncomplicated Firewall) with NSA-compliant security hardening based on the selected deployment profile. It implements defense-in-depth with egress filtering, anti-spoofing protections (uRPF), and comprehensive logging for denied traffic.
+
+**NSA Compliance:** Implements requirements from NSA Network Infrastructure Security Guide (U/OO/118623-22):
+- Sec 2.1: Stateful firewall with deny-by-default egress filtering
+- Sec 8.1: Unicast Reverse Path Forwarding (uRPF) anti-spoofing
 
 ## 🔗 Dependencies
 
@@ -10,8 +14,30 @@ This module configures UFW (Uncomplicated Firewall) with security-appropriate ru
 - systemctl: Service management
 - openssh-server: SSH service (protected by default rules)
 - iptables: Underlying firewall infrastructure
+- sysctl: Kernel parameter configuration (for uRPF)
 
 ## ⚙️ Configuration
+
+### NSA Security Enhancements (Module 5 Hardening)
+
+**A. Egress Filtering (NSA Sec 2.1)**
+   - Default deny outbound policy (blocks unauthorized data exfiltration)
+   - Allow only essential services:
+     - DNS (53/tcp, 53/udp)
+     - HTTP/HTTPS (80/tcp, 443/tcp) — package updates
+     - NTP (123/udp) — time synchronization
+     - SMTP/Submission (25/tcp, 587/tcp) — mail relay
+
+**B. Anti-Spoofing Protection (NSA Sec 8.1)**
+   - Enables strict uRPF (Unicast Reverse Path Forwarding)
+   - Kernel parameter: `net.ipv4.conf.all.rp_filter=1`
+   - Validates source IP addresses (drops spoofed packets)
+   - Persists across reboots via `/etc/sysctl.conf`
+
+**C. ACL Logging (NSA Requirement)**
+   - UFW logging level: medium
+   - Logs denied traffic to `/var/log/ufw.log`
+   - Enables security monitoring and incident response
 
 ### Profile-Specific Rules
 
@@ -19,7 +45,7 @@ A. **Basic Profile Rules**
    - Allow SSH (default port or $SSH_PORT)
    - Allow HTTP (port 80) — limited
    - Deny all other inbound by default
-   - Allow all outbound (monitoring and updates)
+   - Egress filtering: DNS, HTTP/HTTPS, NTP, SMTP only
 
 B. **Standard Profile Rules**
    - All Basic rules +
@@ -36,7 +62,7 @@ C. **Advanced Profile Rules**
 ### SSH Port Integration
 
 - Reads `$SSH_PORT` environment variable (set by 0-profile_selection module)
-- Defaults to port 22 if variable not set
+- Defaults to port 22222 if variable not set
 - Creates UFW rules for custom port (e.g., ufw allow 22022/tcp)
 
 ## 🚨 Error Handling

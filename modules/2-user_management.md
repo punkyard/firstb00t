@@ -25,15 +25,38 @@ dcredit = -1         # require at least 1 digit
 ucredit = -1         # require at least 1 uppercase letter
 lcredit = -1         # require at least 1 lowercase letter
 ocredit = -1         # require at least 1 special character
-difok = 3            # at least 3 characters different from old password
-maxrepeat = 3        # no more than 3 repeated consecutive characters
+difok = 8            # at least 8 characters different from old password (NSA Sec 5.3)
+maxrepeat = 2        # no more than 2 repeated consecutive characters
 usercheck = 1        # reject passwords containing username
-enforce_for_root     # enforce policy for root account
+enforce_for_root     # enforce policy for root account (critical)
 ```
 
 **Effect:** All passwords (user + root) must be 15+ chars with upper, lower, digit, special char
 
-### B. NSA Sec 4.3: Authentication Logging
+### B. NSA Sec 5.1: Strong Password Hashing (PAM Configuration)
+
+**PAM Common-Password Stack:**
+```bash
+# pam_pwquality.so: Enforce password strength before hashing
+password    requisite   pam_pwquality.so retry=3
+
+# pam_unix.so: SHA-512 with 10,000 rounds (equivalent to Cisco Type 8 PBKDF2-SHA256)
+password    [success=1 default=ignore]    pam_unix.so obscure use_authtok try_first_pass yescrypt sha512 rounds=10000
+```
+
+**Files Modified:**
+- `/etc/pam.d/common-password` — Enforce pwquality + SHA-512 hashing
+- `/etc/libuser.conf` — Ensure new users created with SHA-512: `crypt_style = sha512`
+
+**Verification:**
+```bash
+# New passwords use $6$ (SHA-512) prefix
+grep root /etc/shadow | head -c 20
+
+# Check PAM configuration
+grep sha512 /etc/pam.d/common-password
+grep rounds /etc/pam.d/common-password
+```
 
 **Syslog Integration:**
 - pam_syslog.so in common-session stack → logs all auth events
@@ -47,17 +70,29 @@ enforce_for_root     # enforce policy for root account
 - Password changes
 - Account lockout/unlock
 
-### C. NSA Sec 4.6: Account Lockout (pam_faillock)
+### D. NSA Sec 4.6: Account Lockout (pam_faillock)
 
 ```bash
-deny=5              # lock account after 5 failed attempts
+deny=3              # NSA Sec 4.6: lock account after 3 failed attempts (not 5)
+fail_interval=900   # reset counter after 15 minutes
 unlock_time=1800    # 30-minute lockout period
+audit               # log to audit system
 ```
 
+**Configuration:**
+- `/etc/security/faillock.conf` — Faillock parameters
+- `/etc/pam.d/common-auth` — Integrated into PAM auth stack (preauth + authfail)
+
 **Behavior:**
-- Blocks further login attempts for 30 minutes
+- Blocks further login attempts after 3 failures for 30 minutes
 - Applies to all accounts including root
-- Admin reset: `faillock --user username --reset`
+- Admin reset: `sudo faillock --user username --reset`
+
+**Verification:**
+```bash
+grep pam_faillock /etc/pam.d/common-auth
+cat /etc/security/faillock.conf
+```
 
 ### D. Sudo Hardening
 

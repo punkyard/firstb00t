@@ -1,82 +1,131 @@
 # 📊 Monitoring Module (10-monitoring)
 
-## Purpose
+## 🎯 Purpose
 
-This module implements comprehensive system monitoring and log aggregation using Logwatch and log rotation policies. It provides automated analysis of system logs, alerting administrators to important events, and ensures critical logs are preserved for forensic analysis and compliance.
+This module implements three critical security monitoring components per NSA Network Infrastructure Security Guide:
+
+1. **File Integrity Monitoring (AIDE)** — Sec 3.1: Detect unauthorized system file modifications
+2. **Centralized Logging (rsyslog)** — Sec 6.1: Forward logs to remote syslog server for protection against tampering
+3. **Time Synchronization (NTP)** — Sec 6.2: Ensure accurate log timestamps via Chrony NTP client
+
+Together, these provide:
+- ✅ Tamper detection via AIDE baseline + daily verification
+- ✅ Centralized audit trail for forensics and compliance
+- ✅ Reliable timestamps for correlation across systems
 
 ## 🔗 Dependencies
 
-- logwatch: Log analysis and reporting tool
-- logrotate: Log rotation and management
-- gzip: Compression for archived logs
-- crond/systemd-timer: Scheduled task execution
-- mailutils: Email delivery for Logwatch reports
-- grep/awk/sed: Log parsing utilities
+- **aide, aide-common** — File integrity monitoring and database tools
+- **chrony** — NTP client for time synchronization (RFC 5905)
+- **rsyslog** — System logging daemon with remote forwarding (RFC 5424)
+- **cron** — Scheduled task execution for daily AIDE checks
+- **internet access** — Required for NTP pool.ntp.org (UDP port 123)
 
 ## ⚙️ Configuration
 
-### Logwatch Configuration
+### A. AIDE File Integrity Monitoring (NSA Sec 3.1)
 
-A. **Email Reporting**
-   - Frequency: Daily (default)
-   - Time: Early morning (typically 6 AM)
-   - Recipient: System administrator email
-   - Format: Detailed analysis with statistics
-   - Detail level: Medium (customizable)
+**Baseline Initialization:**
+```bash
+aideinit      # Create initial database
+# Database location: /var/lib/aide/aide.db.new → /var/lib/aide/aide.db
+```
 
-B. **Log Sources**
-   - System logs: `/var/log/syslog`, `/var/log/auth.log`
-   - SSH logs: `/var/log/auth.log` (login attempts, authentications)
-   - Firewall logs: `/var/log/ufw.log` (UFW rule violations)
-   - Application logs: `/var/log/firstboot/*.log` (module execution)
-   - Mail logs: `/var/log/mail.log` (mail delivery events)
-   - Fail2ban: `/var/log/fail2ban.log` (intrusion attempts)
+**Monitored Paths:**
+```
+/boot   R     # Read-only check (size, MD5, SHA256)
+/etc    R
+/sbin   R
+/usr/sbin R
+/usr/bin R
+/lib    R
+/lib64  R
+```
 
-C. **Report Details**
-   - Failed login attempts and patterns
-   - Firewall rejections and anomalies
-   - Service restarts and errors
-   - Cron job execution results
-   - Security-related events summary
+**Daily Verification:**
+- **Schedule:** Cron: `/etc/cron.daily/aide-check`
+- **Action:** `aide --check` compares filesystem against baseline
+- **Output:** `/var/log/firstboot/aide-daily.log`
+- **Alerts:** On mismatch, log and alert administrator
 
-### Log Rotation Policies
+**Detection Includes:**
+- File additions/deletions in critical paths
+- Permission changes (mode, owner, group)
+- Content modifications (MD5/SHA256 hash)
+- Link changes
 
-A. **Default Rotation**
-   - Frequency: Daily for critical logs, weekly for others
-   - Retention: 14 days for regular logs, 30 days for security
-   - Compression: gzip (saves ~90% space for text logs)
-   - Permissions: 0640 (readable by admin, not world-visible)
+### B. Centralized Rsyslog Logging (NSA Sec 6.1)
 
-B. **Log-Specific Policies**
-   - `/var/log/auth.log`: Daily rotation, 30-day retention, encrypted storage recommended
-   - `/var/log/syslog`: Daily rotation, 14-day retention
-   - `/var/log/ufw.log`: Weekly rotation, 30-day retention (security-sensitive)
-   - `/var/log/fail2ban.log`: Daily rotation, 30-day retention (security-sensitive)
-   - `/var/log/firstboot/*.log`: Monthly rotation, 60-day retention (compliance)
+**Configuration:**
+- **File:** `/etc/rsyslog.d/50-remote.conf`
+- **Target:** Remote syslog server via TCP (@@) for reliability
+- **Queue:** LinkedList queue with persistent save on shutdown
+- **Backup:** Local copy to `/var/log/firstboot/syslog-backup.log`
+
+**Forwarded Logs:**
+```
+*.* @@remote-syslog-server:514
+```
+
+**Reliability Features:**
+- Queued delivery (RFC 5424, RFC 3195)
+- Fallback to local backup if server unavailable
+- Automatic resume retry on connection recovery
+
+**Server Configuration (example):**
+```bash
+# On centralized syslog server
+# Listen on port 514 (TCP)
+cat >> /etc/rsyslog.conf <<EOF
+# Listen on TCP 514
+input(type="imtcp" port="514")
+
+# Store forwarded logs
+:hostname, isequal, "client-hostname" /var/log/remote/client.log
+EOF
+systemctl restart rsyslog
+```
+
+### C. NTP Time Synchronization (NSA Sec 6.2)
+
+**Client Configuration:**
+- **Service:** Chrony (lighter than NTP daemon)
+- **NTP Servers:**
+  - Primary: `pool.ntp.org` (load-balanced pool, 4 sources max)
+  - Fallback: `time.nist.gov`, `time.cloudflare.com`
+- **Sync Settings:**
+  - `makestep 1.0 3` — Allow large corrections during boot
+  - `iburst` — Faster sync at startup
+
+**Configuration File:**
+- **Path:** `/etc/chrony/chrony.conf`
+- **Service:** `systemctl enable --now chrony`
+
+**Verification:**
+```bash
+chronyc tracking        # Show sync status
+chronyc sources -v      # Show server connections
+timedatectl            # System time status
+```
 
 ## 🚨 Error Handling
 
-### Common Errors
+| Error | Cause | Solution | Prevention |
+|-------|-------|----------|-----------|
+| **AIDE init fails** | Disk space or permissions | Free disk space; check `/var/lib/aide/` perms | Monitor disk during aideinit |
+| **Chrony won't sync** | Network blocked or bad NTP server | Check `chronyc sources`; verify firewall allows UDP 123 | Ensure outbound UDP 123 allowed |
+| **rsyslog forwarding fails** | Server unreachable or blocked | Check `systemctl status rsyslog`; verify server listening | Local backup logs to `/var/log/firstboot/` |
+| **Daily AIDE cron fails** | Database corrupted or perms changed | Reinitialize AIDE; check `/var/lib/aide/` ownership | Protect AIDE DB with immutable flag |
+| **Time drift detected** | NTP server issues or network problems | Check `chronyc tracking`; add fallback servers | Multiple NTP sources per NSA |
 
-A. Logwatch fails to send email
-   - Cause: Postfix not running or relay misconfigured
-   - Solution: Verify mail module (9-mail_config) completed; check Postfix status
-   - Prevention: Run 9-mail_config module before 10-monitoring
-
-B. Log rotation fails
-   - Cause: Permission denied or disk full
-   - Solution: Check file permissions; free up disk space
-   - Prevention: Monitor disk usage; ensure proper permissions on log directories
-
-C. Logwatch cron job not running
-   - Cause: Cron service not active or crontab syntax error
-   - Solution: Enable cron service; check crontab entry with crontab -l
-   - Prevention: Verify cron enabled at boot
-
-D. Log file growth exceeds storage
-   - Cause: Logs not rotating or retention too long
-   - Solution: Force log rotation: logrotate -f /etc/logrotate.conf
-   - Prevention: Adjust rotation frequency or retention periods
+**Rollback:**
+```bash
+# If module fails mid-execution:
+systemctl stop chrony rsyslog
+rm /etc/rsyslog.d/50-remote.conf
+rm /var/lib/aide/aide.db         # Force re-initialization on retry
+systemctl restart chrony rsyslog
+```
 
 ## 🔄 Integration
 

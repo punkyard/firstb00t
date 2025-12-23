@@ -150,13 +150,39 @@ configure_ssh_honeypot() {
     echo "- Your management IP will be whitelisted"
     echo "- SSH will run on the secure port configured above"
     echo ""
+    
+    # Auto-detect user's source IP from SSH session
+    local detected_ip=""
+    if [ -n "$SSH_CONNECTION" ]; then
+        detected_ip=$(echo "$SSH_CONNECTION" | awk '{print $1}')
+        echo "🔍 Auto-detected your IP: ${detected_ip}"
+    elif [ -n "$SSH_CLIENT" ]; then
+        detected_ip=$(echo "$SSH_CLIENT" | awk '{print $1}')
+        echo "🔍 Auto-detected your IP: ${detected_ip}"
+    else
+        echo "⚠️  Could not auto-detect IP (not running via SSH)"
+    fi
+    
     read -p "Enable port 22 honeypot? (y/N): " enable_honeypot
     
     if [[ "$enable_honeypot" =~ ^[Yy]$ ]]; then
-        # Prompt for management IP
         echo ""
-        echo "Enter your management IP address to whitelist:"
-        read -p "Management IP (CIDR notation, e.g., 203.0.113.45/32): " mgmt_ip
+        if [ -n "$detected_ip" ]; then
+            echo "Detected IP: ${detected_ip}"
+            read -p "Use this IP for whitelist? (Y/n): " use_detected
+            if [[ "$use_detected" =~ ^[Nn]$ ]]; then
+                read -p "Enter management IP (CIDR, e.g., 203.0.113.45/32): " mgmt_ip
+            else
+                # Add /32 if no CIDR notation
+                if [[ "$detected_ip" =~ / ]]; then
+                    mgmt_ip="$detected_ip"
+                else
+                    mgmt_ip="${detected_ip}/32"
+                fi
+            fi
+        else
+            read -p "Enter management IP (CIDR, e.g., 203.0.113.45/32): " mgmt_ip
+        fi
         
         if [ -z "$mgmt_ip" ]; then
             echo "❌ No IP provided. Honeypot disabled for safety."

@@ -2,108 +2,99 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# 🌈 color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # no color
+# 🛡️ Fail2ban Module (NSA Sec 6.1, 4.6 — Automated Response + Centralized Logging)
+MODULE_ID="6-fail2ban"
+REMOTE_SYSLOG="${REMOTE_SYSLOG_SERVER:-remote-syslog-server}"
 
-# 📋 Module information
-MODULE_NAME="fail2ban"
-MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="fail2ban installation and configuration"
-MODULE_DEPENDENCIES=("apt" "systemctl" "fail2ban-client")
-
-# 📝 Logging function
-log_action() {
-    mkdir -p /var/log/firstboot
-    echo "[$(date -Iseconds)] [${MODULE_NAME}] $1" | tee -a "/var/log/firstboot/${MODULE_NAME}.log"
+# Setup logging
+mkdir -p /var/log/firstboot
+log() {
+    local level=$1; shift
+    printf '%s [%s] [%s] %s\n' "$(date -Iseconds)" "$level" "$MODULE_ID" "$*" | tee -a "/var/log/firstboot/${MODULE_ID}.log"
 }
 
-# 🚨 Error handling
-handle_error() {
-    error_message="$1"
-    error_step="$2"
-    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
-    cleanup
-    exit 1
-}
+trap 'log error "Failed at line $LINENO"; rollback; exit 1' ERR
+trap 'log info "Fail2ban configuration completed"' EXIT
 
-# 🧹 cleanup function
-cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
-    # restore original config if needed
-    if [ -f /etc/fail2ban/jail.local.bak ]; then
-        mv /etc/fail2ban/jail.local.bak /etc/fail2ban/jail.local
-        log_action "info : configuration fail2ban restaurée"
-    fi
-    # leave fail2ban running; only restore config
-    log_action "info : nettoyage effectué"
-}
-
-# 🔄 check dependencies
-check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
-    for dep in "${MODULE_DEPENDENCIES[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
-        fi
-    done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
-}
-
-# 📊 progress tracking
-update_progress() {
-    current_step="$1"
-    total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
-}
-
-# 📦 install fail2ban
-install_fail2ban() {
-    echo -e "${BLUE}📦 installation de fail2ban...${NC}"
+main() {
+    log info "Starting fail2ban hardening (NSA Sec 6.1, 4.6)"
     
-    # check if already installed
+    install_fail2ban
+    backup_config
+    configure_centralized_logging
+    configure_expanded_jails
+    restart_services
+    validate
+}
+
+install_fail2ban() {
+    log info "Checking fail2ban package"
     if dpkg -s fail2ban >/dev/null 2>&1; then
-        log_action "info : fail2ban déjà installé"
-        echo -e "${GREEN}✅ fail2ban déjà installé${NC}"
+        log info "fail2ban already installed"
         return 0
     fi
     
-    # update package list
-    apt update || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
-    
-    # install fail2ban
-    apt install -y fail2ban || handle_error "échec de l'installation de fail2ban" "installation"
-    
-    log_action "info : fail2ban installé"
+    log info "Installing fail2ban"
+    apt-get update && apt-get install -y fail2ban
+    log info "fail2ban installed"
 }
 
-# 🔒 configure fail2ban
-configure_fail2ban() {
-    echo -e "${BLUE}🔒 configuration de fail2ban...${NC}"
+backup_config() {
+    log info "Backing up fail2ban config"
+    if [ -f /etc/fail2ban/jail.local ]; then
+        if [ ! -f /etc/fail2ban/jail.local.bak ]; then
+            cp /etc/fail2ban/jail.local /etc/fail2ban/jail.local.bak
+            log info "Backup created: jail.local.bak"
+        fi
+    fi
+    if [ -f /etc/fail2ban/fail2ban.conf ]; then
+        if [ ! -f /etc/fail2ban/fail2ban.conf.bak ]; then
+            cp /etc/fail2ban/fail2ban.conf /etc/fail2ban/fail2ban.conf.bak
+            log info "Backup created: fail2ban.conf.bak"
+        fi
+    fi
+}
+
+configure_centralized_logging() {
+    log info "Configuring centralized fail2ban logging (NSA Sec 6.1)"
     
-    # backup original config
-    cp /etc/fail2ban/jail.local /etc/fail2ban/jail.local.bak 2>/dev/null || true
+    # Configure fail2ban to use syslog
+    if grep -q "^logtarget =" /etc/fail2ban/fail2ban.conf 2>/dev/null; then
+        sed -i 's/^logtarget =.*/logtarget = SYSLOG/' /etc/fail2ban/fail2ban.conf
+    else
+        echo "logtarget = SYSLOG" >> /etc/fail2ban/fail2ban.conf
+    fi
+    log info "fail2ban logging to syslog configured"
     
-    # create jail.local
-    cat > /etc/fail2ban/jail.local << EOF
+    # Configure rsyslog forwarding for fail2ban
+    cat > /etc/rsyslog.d/50-fail2ban.conf <<EOF
+# Forward fail2ban logs to remote syslog (NSA Sec 6.1)
+if \$programname == 'fail2ban' then @@${REMOTE_SYSLOG}:514
+& stop
+EOF
+    log info "rsyslog forwarding configured: ${REMOTE_SYSLOG}:514"
+}
+
+configure_expanded_jails() {
+    log info "Configuring expanded jail coverage (NSA Sec 4.6)"
+    
+    cat > /etc/fail2ban/jail.local <<'EOF'
+# Fail2ban Jail Configuration — NSA Sec 4.6 (≤3 attempts)
+# Generated by firstb00t Module 6
+
 [DEFAULT]
-bantime = 3600
-findtime = 600
-maxretry = 3
+# Ban parameters per NSA Sec 4.6
+bantime = 3600       # 1 hour ban
+findtime = 600       # 10 minute window
+maxretry = 3         # NSA Sec 4.6 limit (≤3 attempts)
 destemail = root@localhost
 sender = fail2ban@localhost
 action = %(action_mwl)s
 
+# SSH Protection
 [sshd]
 enabled = true
-port = 22222
+port = ssh
 filter = sshd
 logpath = /var/log/auth.log
 maxretry = 3
@@ -112,42 +103,190 @@ bantime = 3600
 
 [sshd-ddos]
 enabled = true
-port = 22222
+port = ssh
 filter = sshd-ddos
 logpath = /var/log/auth.log
 maxretry = 3
 findtime = 600
 bantime = 3600
 
-[apache]
+# HTTP/HTTPS Protection
+[apache-auth]
 enabled = true
 port = http,https
 filter = apache-auth
-logpath = /var/log/apache2/error.log
+logpath = /var/log/apache2/*error.log
 maxretry = 3
 findtime = 600
 bantime = 3600
 
-[apache-bad-requests]
+[apache-badbots]
 enabled = true
 port = http,https
-filter = apache-bad-requests
-logpath = /var/log/apache2/access.log
+filter = apache-badbots
+logpath = /var/log/apache2/*access.log
+maxretry = 2
+findtime = 600
+bantime = 86400    # 24 hours for bots
+
+[apache-noscript]
+enabled = true
+port = http,https
+filter = apache-noscript
+logpath = /var/log/apache2/*error.log
+maxretry = 2
+findtime = 600
+bantime = 86400
+
+# Nginx Protection
+[nginx-http-auth]
+enabled = true
+port = http,https
+filter = nginx-http-auth
+logpath = /var/log/nginx/error.log
 maxretry = 3
 findtime = 600
 bantime = 3600
 
-[postfix]
+[nginx-limit-req]
 enabled = true
-port = smtp,465,submission
-filter = postfix
+port = http,https
+filter = nginx-limit-req
+logpath = /var/log/nginx/error.log
+maxretry = 10
+findtime = 600
+bantime = 3600
+
+# Mail Server Protection
+[postfix-sasl]
+enabled = true
+port = smtp,submission
+filter = postfix-sasl
 logpath = /var/log/mail.log
 maxretry = 3
 findtime = 600
 bantime = 3600
 
+[postfix-rbl]
+enabled = true
+port = smtp,submission
+filter = postfix-rbl
+logpath = /var/log/mail.log
+maxretry = 1
+findtime = 600
+bantime = 86400
+
 [dovecot]
 enabled = true
+port = pop3,pop3s,imap,imaps,submission,465,sieve
+filter = dovecot
+logpath = /var/log/mail.log
+maxretry = 3
+findtime = 600
+bantime = 3600
+
+# FTP Protection
+[proftpd]
+enabled = true
+port = ftp,ftp-data,ftps,ftps-data
+filter = proftpd
+logpath = /var/log/proftpd/proftpd.log
+maxretry = 3
+findtime = 600
+bantime = 3600
+
+[vsftpd]
+enabled = true
+port = ftp,ftp-data,ftps,ftps-data
+filter = vsftpd
+logpath = /var/log/vsftpd.log
+maxretry = 3
+findtime = 600
+bantime = 3600
+EOF
+    log info "Expanded jail coverage configured: SSH, HTTP/HTTPS (Apache/Nginx), Mail (Postfix/Dovecot), FTP (ProFTPD/vsftpd)"
+}
+
+restart_services() {
+    log info "Restarting fail2ban and rsyslog services"
+    
+    systemctl restart fail2ban
+    if systemctl is-active --quiet fail2ban; then
+        log info "fail2ban restarted successfully"
+    else
+        log error "fail2ban failed to restart"
+        return 1
+    fi
+    
+    systemctl restart rsyslog
+    if systemctl is-active --quiet rsyslog; then
+        log info "rsyslog restarted successfully"
+    else
+        log error "rsyslog failed to restart"
+        return 1
+    fi
+}
+
+validate() {
+    log info "Validating fail2ban configuration"
+    
+    # Check fail2ban service status
+    if ! systemctl is-active --quiet fail2ban; then
+        log error "fail2ban service not active"
+        return 1
+    fi
+    log info "fail2ban service active"
+    
+    # Check jail.local exists
+    if [ ! -f /etc/fail2ban/jail.local ]; then
+        log error "jail.local not created"
+        return 1
+    fi
+    log info "jail.local configuration present"
+    
+    # Check active jails
+    local jail_count
+    jail_count=$(fail2ban-client status 2>/dev/null | grep -c "Jail list" || echo "0")
+    if [ "$jail_count" -eq 0 ]; then
+        log warn "No jails detected in fail2ban-client status (may need restart)"
+    else
+        log info "Jails configured and active"
+    fi
+    
+    # Check centralized logging config
+    if grep -q "logtarget = SYSLOG" /etc/fail2ban/fail2ban.conf; then
+        log info "Centralized logging configured (syslog)"
+    else
+        log error "Centralized logging not configured"
+        return 1
+    fi
+    
+    # Check rsyslog forwarding config
+    if [ -f /etc/rsyslog.d/50-fail2ban.conf ]; then
+        log info "rsyslog forwarding configuration present"
+    else
+        log error "rsyslog forwarding configuration missing"
+        return 1
+    fi
+    
+    return 0
+}
+
+rollback() {
+    log warn "Rolling back fail2ban configuration"
+    if [ -f /etc/fail2ban/jail.local.bak ]; then
+        cp /etc/fail2ban/jail.local.bak /etc/fail2ban/jail.local
+        log info "jail.local restored from backup"
+    fi
+    if [ -f /etc/fail2ban/fail2ban.conf.bak ]; then
+        cp /etc/fail2ban/fail2ban.conf.bak /etc/fail2ban/fail2ban.conf
+        log info "fail2ban.conf restored from backup"
+    fi
+    rm -f /etc/rsyslog.d/50-fail2ban.conf
+    systemctl restart fail2ban rsyslog 2>/dev/null || true
+}
+
+main "$@"
 port = pop3,pop3s,imap,imaps
 filter = dovecot
 logpath = /var/log/mail.log

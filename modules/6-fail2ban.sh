@@ -6,6 +6,26 @@ IFS=$'\n\t'
 MODULE_ID="6-fail2ban"
 REMOTE_SYSLOG="${REMOTE_SYSLOG_SERVER:-remote-syslog-server}"
 
+# Load admin email from profile configuration
+if [ -f /etc/firstboot/admin_email ]; then
+    ADMIN_EMAIL=$(cat /etc/firstboot/admin_email)
+else
+    ADMIN_EMAIL="root@localhost"
+fi
+
+# Load honeypot configuration
+if [ -f /etc/firstboot/honeypot_enabled ]; then
+    HONEYPOT_ENABLED=$(cat /etc/firstboot/honeypot_enabled)
+else
+    HONEYPOT_ENABLED="false"
+fi
+
+if [ -f /etc/firstboot/honeypot_whitelist_ip ]; then
+    HONEYPOT_WHITELIST_IP=$(cat /etc/firstboot/honeypot_whitelist_ip)
+else
+    HONEYPOT_WHITELIST_IP=""
+fi
+
 # Setup logging
 mkdir -p /var/log/firstboot
 log() {
@@ -87,8 +107,8 @@ configure_expanded_jails() {
 bantime = 3600       # 1 hour ban
 findtime = 600       # 10 minute window
 maxretry = 3         # NSA Sec 4.6 limit (≤3 attempts)
-destemail = root@localhost
-sender = fail2ban@localhost
+destemail = ${ADMIN_EMAIL}
+sender = fail2ban@$(hostname -f)
 action = %(action_mwl)s
 
 # SSH Protection
@@ -204,7 +224,31 @@ maxretry = 3
 findtime = 600
 bantime = 3600
 EOF
-    log info "Expanded jail coverage configured: SSH, HTTP/HTTPS (Apache/Nginx), Mail (Postfix/Dovecot), FTP (ProFTPD/vsftpd)"
+
+    # Add SSH honeypot jail if enabled
+    if [ "$HONEYPOT_ENABLED" = "true" ] && [ -n "$HONEYPOT_WHITELIST_IP" ]; then
+        log info "Configuring SSH honeypot on port 22 (whitelist: ${HONEYPOT_WHITELIST_IP})"
+        cat >> /etc/fail2ban/jail.local <<EOF
+
+# SSH Honeypot (Port 22 Trap) — Permanent Ban
+[sshd-honeypot]
+enabled = true
+port = 22
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 1           # Instant ban on first attempt
+bantime = -1           # Permanent ban (forever)
+findtime = 86400       # 24 hour window
+ignoreip = 127.0.0.1/8 ${HONEYPOT_WHITELIST_IP}
+action = iptables-allports[name=SSH-HONEYPOT]
+         %(action_mwl)s
+EOF
+        log info "SSH honeypot jail configured (permanent ban, whitelist: ${HONEYPOT_WHITELIST_IP})"
+    else
+        log info "SSH honeypot disabled (port 22 will be blocked by firewall)"
+    fi
+    
+    log info "Expanded jail coverage configured: SSH, HTTP/HTTPS (Apache/Nginx), Mail (Postfix/Dovecot), FTP (ProFTPD/vsftpd), Honeypot (if enabled)"
 }
 
 restart_services() {
@@ -267,6 +311,15 @@ validate() {
     else
         log error "rsyslog forwarding configuration missing"
         return 1
+    fi
+    
+    # Check honeypot configuration if enabled
+    if [ "$HONEYPOT_ENABLED" = "true" ]; then
+        if grep -q "\[sshd-honeypot\]" /etc/fail2ban/jail.local; then
+            log info "SSH honeypot jail configured (port 22 trap)"
+        else
+            log warn "Honeypot enabled but jail not found in config"
+        fi
     fi
     
     return 0

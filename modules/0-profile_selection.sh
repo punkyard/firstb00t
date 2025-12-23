@@ -111,6 +111,72 @@ configure_ssh_port() {
     log_action "info : SSH port configured to ${ssh_port}"
 }
 
+# 📧 Configure admin email
+configure_admin_email() {
+    echo ""
+    echo "📧 Administrator Email Configuration"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Email address for security alerts and system notifications:"
+    echo "- Fail2ban intrusion alerts"
+    echo "- AIDE file integrity reports"
+    echo "- Lynis vulnerability scan results"
+    echo "- Certificate expiry warnings"
+    echo ""
+    read -p "Enter admin email (e.g., admin@example.com): " admin_email
+    
+    # Validate email format (basic check)
+    if [ -z "$admin_email" ]; then
+        echo "⚠️  No email provided. Using root@localhost (local only)"
+        admin_email="root@localhost"
+    elif ! [[ "$admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        echo "⚠️  Invalid email format. Using root@localhost"
+        admin_email="root@localhost"
+    fi
+    
+    # Export for modules
+    export ADMIN_EMAIL="$admin_email"
+    echo "$admin_email" > /etc/firstboot/admin_email
+    echo "✅ Admin email configured: ${admin_email}"
+    log_action "info : Admin email configured to ${admin_email}"
+}
+
+# 🍯 Configure SSH honeypot
+configure_ssh_honeypot() {
+    echo ""
+    echo "🍯 SSH Honeypot Configuration (Port 22 Trap)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Leave port 22 open as a honeypot to trap attackers?"
+    echo "- Any connection attempt to port 22 = permanent ban"
+    echo "- Your management IP will be whitelisted"
+    echo "- SSH will run on the secure port configured above"
+    echo ""
+    read -p "Enable port 22 honeypot? (y/N): " enable_honeypot
+    
+    if [[ "$enable_honeypot" =~ ^[Yy]$ ]]; then
+        # Prompt for management IP
+        echo ""
+        echo "Enter your management IP address to whitelist:"
+        read -p "Management IP (CIDR notation, e.g., 203.0.113.45/32): " mgmt_ip
+        
+        if [ -z "$mgmt_ip" ]; then
+            echo "❌ No IP provided. Honeypot disabled for safety."
+            export HONEYPOT_ENABLED="false"
+        else
+            export HONEYPOT_ENABLED="true"
+            export HONEYPOT_WHITELIST_IP="$mgmt_ip"
+            echo "true" > /etc/firstboot/honeypot_enabled
+            echo "$mgmt_ip" > /etc/firstboot/honeypot_whitelist_ip
+            echo "✅ Honeypot enabled. Whitelisted IP: ${mgmt_ip}"
+            log_action "info : SSH honeypot enabled with whitelist ${mgmt_ip}"
+        fi
+    else
+        export HONEYPOT_ENABLED="false"
+        echo "false" > /etc/firstboot/honeypot_enabled
+        echo "⏭️  Honeypot disabled. Port 22 will be closed by firewall."
+        log_action "info : SSH honeypot disabled"
+    fi
+}
+
 # ⚙️ Select profile
 select_profile() {
     echo -e "${BLUE}⚙️ sélection du profil...${NC}"
@@ -246,22 +312,34 @@ main() {
     log_action "info : étape 2 terminée"
     
     # step 3: configure SSH port
-    update_progress 3 5
+    update_progress 3 7
     echo -e "${BLUE}📦 étape 3 : configuration du port SSH...${NC}"
     configure_ssh_port
     log_action "info : étape 3 terminée"
-
-    # step 4: configure profile
-    update_progress 4 5
-    echo -e "${BLUE}📦 étape 4 : configuration du profil...${NC}"
-    configure_profile
+    
+    # step 4: configure admin email
+    update_progress 4 7
+    echo -e "${BLUE}📦 étape 4 : configuration de l'email administrateur...${NC}"
+    configure_admin_email
     log_action "info : étape 4 terminée"
-
-    # step 5: validate
-    update_progress 5 5
-    echo -e "${BLUE}📦 étape 5 : validation du profil...${NC}"
-    validate_profile
+    
+    # step 5: configure SSH honeypot
+    update_progress 5 7
+    echo -e "${BLUE}📦 étape 5 : configuration du honeypot SSH...${NC}"
+    configure_ssh_honeypot
     log_action "info : étape 5 terminée"
+
+    # step 6: configure profile
+    update_progress 6 7
+    echo -e "${BLUE}📦 étape 6 : configuration du profil...${NC}"
+    configure_profile
+    log_action "info : étape 6 terminée"
+
+    # step 7: validate
+    update_progress 7 7
+    echo -e "${BLUE}📦 étape 7 : validation du profil...${NC}"
+    validate_profile
+    log_action "info : étape 7 terminée"
 
     echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
     log_action "succès : installation du module $MODULE_NAME terminée"

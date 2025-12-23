@@ -6,6 +6,8 @@ IFS=$'\n\t'
 # 🔒 SSH Configuration Module (NSA Sec 7.11.1 — Strong Crypto)
 # Default SSH port (can be overridden by environment variable)
 SSH_PORT="${SSH_PORT:-22}"
+# Source-based ACLs (NSA Sec 7.6)
+SSH_ALLOWED_SUBNETS="${SSH_ALLOWED_SUBNETS:-192.168.1.0/24,10.0.0.0/8}"
 MODULE_ID="3-ssh_config"
 SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
 
@@ -26,6 +28,7 @@ main() {
     backup_sshd_config
     configure_sshd_main
     configure_strong_crypto
+    configure_source_acl
     configure_idle_timeout
     configure_key_exchange
     configure_macs
@@ -59,7 +62,7 @@ configure_sshd_main() {
 # NSA Secure Shell Configuration (CSIS 7.x hardening)
 
 # Port Configuration
-Port 22
+Port ${SSH_PORT}
 Protocol 2
 AddressFamily inet
 
@@ -138,6 +141,22 @@ configure_macs() {
     log info "MAC algorithms hardened: HMAC-SHA2-512-ETM, HMAC-SHA2-256-ETM"
 }
 
+configure_source_acl() {
+    log info "Configuring source-based access control (NSA Sec 7.6)"
+    cat > "${SSHD_CONF_DIR}/99-acl.conf" <<EOF
+# NSA Section 7.6 — Source-Based Access Control
+# Allow SSH only from management subnets
+Match Address ${SSH_ALLOWED_SUBNETS}
+    PasswordAuthentication no
+    PubkeyAuthentication yes
+
+# Deny all other sources
+Match Address *,!${SSH_ALLOWED_SUBNETS}
+    DenyUsers *
+EOF
+    log info "Source ACL configured for subnets: ${SSH_ALLOWED_SUBNETS}"
+}
+
 configure_host_keys() {
     log info "Verifying host key algorithms (NSA Sec 7.11.1)"
     # Explicitly listed in 99-ciphers-hardened.conf for redundancy
@@ -178,6 +197,14 @@ validate() {
         log info "Idle timeout configured (300s)"
     else
         log error "Idle timeout not configured"
+        return 1
+    fi
+
+    # Verify source ACL configured
+    if grep -q "Match Address" "${SSHD_CONF_DIR}/99-acl.conf"; then
+        log info "Source-based ACL configured (NSA Sec 7.6)"
+    else
+        log error "Source-based ACL not configured"
         return 1
     fi
     

@@ -2,10 +2,10 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# 📊 Module 10: Monitoring (AIDE, Centralized Rsyslog, NTP)
+# 📊 Module 10: Monitoring (AIDE, Centralized Rsyslog, NTP, Vulnerability Scanning)
 MODULE_ID="10-monitoring"
-MODULE_VERSION="2.0.0"
-MODULE_DESCRIPTION="file integrity monitoring (AIDE), centralized logging (rsyslog), and time synchronization (NTP)"
+MODULE_VERSION="2.1.0"
+MODULE_DESCRIPTION="file integrity monitoring (AIDE), centralized logging (rsyslog), time synchronization (NTP), vulnerability scanning (Lynis)"
 
 # 📝 Logging function
 log() {
@@ -14,7 +14,7 @@ log() {
   printf '%s [%s] [%s] %s\n' "$(date -Iseconds)" "$level" "$MODULE_ID" "$*" | tee -a "/var/log/firstboot/${MODULE_ID}.log"
 }
 
-# �� Error handling
+# 🛡️ Error handling
 trap 'log ERROR "Failed at line $LINENO"; rollback; exit 1' ERR
 trap 'log INFO "Module finished (status: $?)"' EXIT
 
@@ -46,8 +46,28 @@ install_dependencies() {
     log INFO "Installing rsyslog..."
     apt-get install -y rsyslog >/dev/null 2>&1 || { log ERROR "rsyslog install failed"; return 1; }
   fi
+
+  if ! dpkg -s lynis >/dev/null 2>&1; then
+    log INFO "Installing Lynis (vulnerability scanning)..."
+    apt-get install -y lynis >/dev/null 2>&1 || { log ERROR "Lynis install failed"; return 1; }
+  fi
   
   log INFO "Dependencies installed"
+}
+
+run_vulnerability_scan() {
+  log INFO "Running vulnerability scan (Lynis)"
+  mkdir -p /var/log/firstboot
+  local report_file="/var/log/firstboot/lynis-report.txt"
+  local log_file="/var/log/firstboot/lynis.log"
+
+  # Lynis exit codes: 0=OK, 1=warnings, 2=tests skipped, 128=errors
+  lynis audit system --quiet --logfile "${log_file}" --report-file "${report_file}" >/dev/null 2>&1 || {
+    local rc=$?
+    log ERROR "Lynis scan returned code ${rc}"; return 1;
+  }
+
+  log INFO "Lynis scan complete. Report: ${report_file}"
 }
 
 # Configure AIDE
@@ -140,6 +160,8 @@ validate() {
   systemctl is-active chrony >/dev/null 2>&1 && log INFO "✓ Chrony OK" || { log ERROR "✗ Chrony not running"; ok=false; }
   systemctl is-active rsyslog >/dev/null 2>&1 && log INFO "✓ rsyslog OK" || { log ERROR "✗ rsyslog not running"; ok=false; }
   [ -f /etc/rsyslog.d/50-remote.conf ] && log INFO "✓ rsyslog config OK" || { log ERROR "✗ rsyslog config missing"; ok=false; }
+  [ -f /var/log/firstboot/lynis-report.txt ] && log INFO "✓ Lynis report present" || { log ERROR "✗ Lynis report missing"; ok=false; }
+  command -v lynis >/dev/null 2>&1 && log INFO "✓ Lynis installed" || { log ERROR "✗ Lynis not installed"; ok=false; }
   
   [ "$ok" = true ] && return 0 || return 1
 }
@@ -153,6 +175,7 @@ main() {
   configure_aide || return 1
   configure_ntp || return 1
   configure_rsyslog || return 1
+  run_vulnerability_scan || return 1
   validate || return 1
   
   log INFO "========== Module 10 Complete ========="

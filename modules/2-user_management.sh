@@ -16,13 +16,26 @@ log() {
 trap 'log error "Failed at line $LINENO"; rollback; exit 1' ERR
 trap 'log info "Module finished (status: $?)"' EXIT
 
-# 🔄 Idempotency: Check if PAM pwquality already configured
+# 🔐 Load admin email for MFA enrollment notifications
+ADMIN_EMAIL=$(cat /etc/firstboot/admin_email 2>/dev/null || echo "root@localhost")
+
+# � Idempotency: Check if PAM pwquality already configured
 ensure_pwquality_installed() {
   if ! dpkg -s libpam-pwquality >/dev/null 2>&1; then
     log info "Installing libpam-pwquality (PAM password quality enforcement)"
     apt-get update && apt-get install -y libpam-pwquality
   else
     log info "libpam-pwquality already installed"
+  fi
+}
+
+# 🔐 TuxCare #07: Install Google Authenticator (TOTP MFA)
+ensure_mfa_installed() {
+  if ! dpkg -s libpam-google-authenticator >/dev/null 2>&1; then
+    log info "Installing libpam-google-authenticator (TOTP MFA - TuxCare #07)"
+    apt-get update && apt-get install -y libpam-google-authenticator qrencode
+  else
+    log info "libpam-google-authenticator already installed"
   fi
 }
 
@@ -65,7 +78,186 @@ configure_pam_pwquality() {
   fi
 }
 
-# 📊 Configure NSA Sec 4.3: Comprehensive authentication logging
+# 🔐 TuxCare #07: Configure TOTP MFA in PAM
+configure_mfa_pam() {
+  log info "Configuring TuxCare #07: TOTP MFA via pam_google_authenticator.so"
+  
+  # Backup PAM files before modification
+  cp /etc/pam.d/common-auth /etc/pam.d/common-auth.bak-mfa || true
+  cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak-mfa || true
+  
+  # Add MFA to common-auth stack (before pam_unix.so)
+  # Use nullok initially to allow non-enrolled users (for migration)
+  if ! grep -q "pam_google_authenticator.so" /etc/pam.d/common-auth 2>/dev/null; then
+    # Insert before first pam_unix line
+    sed -i '/^auth.*pam_unix.so.*/i auth required pam_google_authenticator.so nullok' /etc/pam.d/common-auth
+    log info "Added pam_google_authenticator.so to PAM common-auth stack (nullok mode for migration)"
+  else
+    log info "pam_google_authenticator.so already in PAM common-auth"
+  fi
+  
+  # Enable challenge-response in SSH (required for TOTP)
+  sed -i 's/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || \
+  sed -i 's/^#ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || \
+  echo "ChallengeResponseAuthentication yes" >> /etc/ssh/sshd_config
+  
+  sed -i 's/^KbdInteractiveAuthentication.*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || \
+  sed -i 's/^#KbdInteractiveAuthentication.*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || \
+  echo "KbdInteractiveAuthentication yes" >> /etc/ssh/sshd_config
+  
+  # Ensure AuthenticationMethods allows keyboard-interactive + publickey
+  if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config 2>/dev/null; then
+    echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
+    log info "Set SSH AuthenticationMethods to publickey,keyboard-interactive (key + TOTP)"
+  fi
+  
+  log info "SSH configured for MFA: publickey + TOTP required"
+}
+
+# 🔐 TuxCare #07: Generate TOTP secrets for admin users
+generate_mfa_secrets() {
+  log info "Generating TOTP MFA secrets for admin users"
+  
+  # Get list of sudo users
+  local admin_users=$(getent group sudo 2>/dev/null | cut -d: -f4 | tr ',' ' ')
+  
+  if [ -z "$admin_users" ]; then
+    log warn "No sudo users found. Skipping MFA enrollment."
+    return
+  fi
+  
+  for user in $admin_users; do
+    # Skip root for now (requires special handling)
+    if [ "$user" = "root" ]; then
+      log info "Skipping root MFA enrollment (use manual google-authenticator)"
+      continue
+    fi
+    
+    if [ ! -f "/home/${user}/.google_authenticator" ]; then
+      log info "Generating TOTP secret for user: ${user}"
+      
+      # Generate secret non-interactively with secure defaults
+      # -t: time-based (TOTP), -d: disallow reuse, -f: force overwrite
+      # -r 3 -R 30: rate limit (3 attempts per 30 seconds)
+      # -w 3: window size (accept 3 time steps before/after)
+      # -Q UTF8 -q: QR code UTF8, quiet mode
+      su - "$user" -c "google-authenticator -t -d -f -r 3 -R 30 -w 3 -Q UTF8 -q" 2>&1 | tee "/var/log/firstb00t/mfa-${user}.log" || true
+      
+      # Save recovery codes separately
+      local codes_file="/var/log/firstb00t/mfa-${user}-recovery.txt"
+      if [ -f "/home/${user}/.google_authenticator" ]; then
+        # Extract emergency scratch codes (lines after secret)
+        tail -n +2 "/home/${user}/.google_authenticator" | head -5 > "${codes_file}"
+        chmod 600 "${codes_file}"
+        chown "$user:$user" "${codes_file}"
+        
+        log info "✅ MFA enrolled for ${user}. Recovery codes: ${codes_file}"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "🔐 MFA ENROLLMENT: ${user}"
+        echo "═══════════════════════════════════════════════════════════"
+        echo "Scan QR code with authenticator app (Google Auth, Authy, etc.):"
+        echo ""
+        # Display QR code if in interactive terminal
+        if [ -t 0 ]; then
+          su - "$user" -c "head -1 ~/.google_authenticator | qrencode -t ANSI256" 2>/dev/null || echo "(QR code display requires interactive terminal)"
+        else
+          echo "Run as ${user}: head -1 ~/.google_authenticator | qrencode -t ANSI256"
+        fi
+        echo ""
+        echo "Recovery codes saved: ${codes_file}"
+        echo "⚠️  Store recovery codes securely (offline backup recommended)"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+      else
+        log error "Failed to generate MFA secret for ${user}"
+      fi
+    else
+      log info "MFA already configured for ${user}"
+    fi
+  done
+  
+  # Restart SSH to apply MFA changes
+  systemctl restart sshd
+  log info "SSH restarted with MFA enabled"
+}
+
+# � TuxCare #07: Configure TOTP MFA in PAM
+configure_mfa_pam() {
+  log info "Configuring TuxCare #07: TOTP MFA via pam_google_authenticator.so"
+  
+  # Add MFA to common-auth stack (before pam_unix.so)
+  # Use nullok initially to allow non-enrolled users (for migration)
+  if ! grep -q "pam_google_authenticator.so" /etc/pam.d/common-auth 2>/dev/null; then
+    # Insert before first pam_unix line
+    sed -i '/^auth.*pam_unix.so.*/i auth required pam_google_authenticator.so nullok' /etc/pam.d/common-auth
+    log info "Added pam_google_authenticator.so to PAM common-auth stack (nullok mode for migration)"
+  else
+    log info "pam_google_authenticator.so already in PAM common-auth"
+  fi
+  
+  # Enable challenge-response in SSH (required for TOTP)
+  sed -i 's/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || true
+  sed -i 's/^KbdInteractiveAuthentication.*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || true
+  
+  # Ensure AuthenticationMethods allows keyboard-interactive
+  if ! grep -q "^AuthenticationMethods" /etc/ssh/sshd_config 2>/dev/null; then
+    echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
+    log info "Set SSH AuthenticationMethods to publickey,keyboard-interactive (key + TOTP)"
+  fi
+  
+  log info "SSH configured for MFA: publickey + TOTP required"
+}
+
+# 🔐 TuxCare #07: Generate TOTP secrets for admin users
+generate_mfa_secrets() {
+  log info "Generating TOTP MFA secrets for admin users"
+  
+  # Get list of sudo users
+  local admin_users=$(getent group sudo | cut -d: -f4 | tr ',' ' ')
+  
+  if [ -z "$admin_users" ]; then
+    log warn "No sudo users found. Skipping MFA enrollment."
+    return
+  fi
+  
+  for user in $admin_users; do
+    if [ ! -f "/home/${user}/.google_authenticator" ]; then
+      log info "Generating TOTP secret for user: ${user}"
+      
+      # Generate secret non-interactively with secure defaults
+      su - "$user" -c "google-authenticator -t -d -f -r 3 -R 30 -w 3 -Q UTF8 -q" 2>&1 | tee "/var/log/firstb00t/mfa-${user}.log"
+      
+      # Extract QR code and backup codes
+      local qr_file="/var/log/firstb00t/mfa-${user}-qr.txt"
+      local codes_file="/var/log/firstb00t/mfa-${user}-recovery.txt"
+      
+      su - "$user" -c "cat ~/.google_authenticator | head -1" > "${codes_file}"
+      
+      log info "✅ MFA enrolled for ${user}. Recovery codes: ${codes_file}"
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "🔐 MFA ENROLLMENT: ${user}"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "Scan QR code with authenticator app (Google Auth, Authy, etc.):"
+      echo ""
+      su - "$user" -c "qrencode -t ANSI256 < ~/.google_authenticator | head -1"
+      echo ""
+      echo "Recovery codes saved: ${codes_file}"
+      echo "⚠️  Store recovery codes securely (offline backup recommended)"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo ""
+    else
+      log info "MFA already configured for ${user}"
+    fi
+  done
+  
+  # Restart SSH to apply MFA changes
+  systemctl restart sshd
+  log info "SSH restarted with MFA enabled"
+}
+
+# �📊 Configure NSA Sec 4.3: Comprehensive authentication logging
 configure_auth_logging() {
   log info "Configuring NSA Sec 4.3: comprehensive auth attempt logging"
   
@@ -121,10 +313,10 @@ configure_sudo_hardening() {
 
 # ✅ Validation: Verify password policy is active
 validate() {
-  log info "Validating NSA Sec 5.x password policy enforcement..."
+  log info "Validating NSA Sec 5.x password policy + TuxCare #07 MFA..."
   
   local checks_passed=0
-  local checks_total=5
+  local checks_total=6
   
   # Check 1: pwquality installed
   if dpkg -s libpam-pwquality >/dev/null 2>&1; then
@@ -166,6 +358,14 @@ validate() {
     log error "❌ Check 5: Account lockout NOT configured"
   fi
   
+  # Check 6: MFA (pam_google_authenticator) configured
+  if grep -q "pam_google_authenticator.so" /etc/pam.d/common-auth 2>/dev/null; then
+    log info "✅ Check 6: MFA (TOTP via pam_google_authenticator.so) configured"
+    ((checks_passed++))
+  else
+    log error "❌ Check 6: MFA NOT configured"
+  fi
+  
   log info "Validation complete: $checks_passed/$checks_total checks passed"
   [ "$checks_passed" -eq "$checks_total" ] && return 0 || return 1
 }
@@ -186,7 +386,7 @@ rollback() {
 
 # 🚀 Main execution
 main() {
-  log info "Starting Module 2: User Management (NSA Sec 4.x-5.x hardening)"
+  log info "Starting Module 2: User Management (NSA Sec 4.x-5.x + TuxCare #07 MFA)"
   
   # Create logs directory if needed
   mkdir -p /var/log/firstb00t
@@ -198,75 +398,18 @@ main() {
   configure_account_lockout
   configure_sudo_hardening
   
+  # TuxCare #07: MFA deployment (CRITICAL for Zero Trust)
+  log info "═══════════════════════════════════════════════════════════"
+  log info "TuxCare #07: Deploying Multi-Factor Authentication (MFA)"
+  log info "═══════════════════════════════════════════════════════════"
+  ensure_mfa_installed
+  configure_mfa_pam
+  generate_mfa_secrets
+  
   log info "All configurations applied. Running validation..."
   validate || { log error "Validation failed"; rollback; exit 1; }
   
-  log info "Module 2 completed successfully (NSA Sec 5.2 password policy enforced)"
+  log info "Module 2 completed successfully (NSA Sec 5.2 + TuxCare #07 MFA)"
 }
 
-main "$@"
-    
-    log_action "info : utilisateur sudo créé avec succès"
-}
-
-# 🎯 main function
-main() {
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
-╚════════════════════════════════════════════════════════════${NC}"
-
-    # check dependencies
-    check_dependencies
-
-    # step 1: get user information
-    update_progress 1 3
-    echo -e "${BLUE}📦 étape 1 : configuration de l'utilisateur...${NC}"
-    
-    # read username
-    read -p "nom d'utilisateur sudo : " user_sudo
-    if [ -z "$user_sudo" ]; then
-        handle_error "nom d'utilisateur vide" "configuration de l'utilisateur"
-    fi
-    
-    # read password
-    read -sp "mot de passe : " user_password
-    echo
-    if ! validate_password "$user_password"; then
-        handle_error "mot de passe trop faible" "configuration de l'utilisateur"
-    fi
-    
-    log_action "info : étape 1 terminée"
-
-    # step 2: create user
-    update_progress 2 3
-    echo -e "${BLUE}📦 étape 2 : création de l'utilisateur...${NC}"
-    create_sudo_user "$user_sudo" "$user_password"
-    log_action "info : étape 2 terminée"
-
-    # step 3: verify
-    update_progress 3 3
-    echo -e "${BLUE}📦 étape 3 : vérification...${NC}"
-    
-    # verify user exists
-    if ! id "$user_sudo" &>/dev/null; then
-        handle_error "utilisateur non trouvé" "vérification"
-    fi
-    
-    # verify sudo group
-    if ! groups "$user_sudo" | grep -q sudo; then
-        handle_error "utilisateur non dans le groupe sudo" "vérification"
-    fi
-    
-    # verify .ssh directory
-    if [ ! -d "/home/$user_sudo/.ssh" ]; then
-        handle_error "répertoire .ssh non trouvé" "vérification"
-    fi
-    
-    log_action "info : étape 3 terminée"
-
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
-}
-
-# 🎯 run main function
-main 
+main "$@" 

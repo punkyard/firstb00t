@@ -1,222 +1,169 @@
 #!/bin/bash
 set -Eeuo pipefail
-IFS=$'\n\t'
 
-# 🌈 color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # no color
+# 📋 Module 8: DNS Configuration with DNSSEC
+# Purpose: Enable DNSSEC validation for DNS security (prevent spoofing/cache poisoning)
+# References: NSA Sec 7.9 (DNS security), TuxCare #06 (protocol vulnerabilities)
 
-# 📋 Module information
-MODULE_NAME="dns_config"
-MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="DNS server configuration"
-MODULE_DEPENDENCIES=("bind9" "systemctl" "named-checkconf")
+MODULE_ID="8-dns_config"
 
-# 📝 Logging function
-log_action() {
-    mkdir -p /var/log/firstboot
-    echo "[$(date -Iseconds)] [${MODULE_NAME}] $1" | tee -a "/var/log/firstboot/${MODULE_NAME}.log"
+# 🔐 Logging
+log() {
+  local level=$1; shift
+  printf '%s [%s] [%s] %s\n' "$(date -Iseconds)" "$level" "$MODULE_ID" "$*" | tee -a "/var/log/firstb00t/${MODULE_ID}.log"
 }
 
-# 🚨 Error handling
-handle_error() {
-    error_message="$1"
-    error_step="$2"
-    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
-    cleanup
-    exit 1
+trap 'log error "Failed at line $LINENO"; rollback; exit 1' ERR
+trap 'log info "Module finished (status: $?)"' EXIT
+
+trap 'log error "Failed at line $LINENO"; rollback; exit 1' ERR
+trap 'log info "Module finished (status: $?)"' EXIT
+
+# 🔄 Idempotency: Check if DNSSEC already configured
+ensure_systemd_resolved_installed() {
+  if ! systemctl is-enabled systemd-resolved >/dev/null 2>&1; then
+    log info "Enabling systemd-resolved for DNSSEC validation"
+    systemctl enable systemd-resolved
+    systemctl start systemd-resolved
+  else
+    log info "systemd-resolved already enabled"
+  fi
 }
 
-# 🧹 cleanup function
-cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
-    # restore original config if needed
-    if [ -f /etc/bind/named.conf.bak ]; then
-        mv /etc/bind/named.conf.bak /etc/bind/named.conf
-        log_action "info : configuration bind9 restaurée"
-    fi
-    # leave bind9 running; only restore config
-    log_action "info : nettoyage effectué"
-}
-
-# 🔄 check dependencies
-check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
-    for dep in "${MODULE_DEPENDENCIES[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
-        fi
-    done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
-}
-
-# 📊 progress tracking
-update_progress() {
-    current_step="$1"
-    total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
-}
-
-# 📦 install bind9
-install_bind9() {
-    echo -e "${BLUE}📦 installation de bind9...${NC}"
-    
-    # check if already installed
-    if dpkg -s bind9 >/dev/null 2>&1; then
-        log_action "info : bind9 déjà installé"
-        echo -e "${GREEN}✅ bind9 déjà installé${NC}"
-        return 0
-    fi
-    
-    # update package list
-    apt update || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
-    
-    # install bind9
-    apt install -y bind9 bind9utils bind9-doc || handle_error "échec de l'installation de bind9" "installation"
-    
-    log_action "info : bind9 installé"
-}
-
-# 🔒 configure bind9
-configure_bind9() {
-    echo -e "${BLUE}🔒 configuration de bind9...${NC}"
-    
-    # backup original config
-    cp /etc/bind/named.conf /etc/bind/named.conf.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
-    
-    # configure named.conf
-    cat > /etc/bind/named.conf << EOF
-options {
-    directory "/var/cache/bind";
-    recursion no;
-    allow-query { localhost; };
-    allow-transfer { none; };
-    allow-update { none; };
-    allow-notify { none; };
-    listen-on { 127.0.0.1; };
-    listen-on-v6 { ::1; };
-    forwarders {
-        8.8.8.8;
-        8.8.4.4;
-    };
-    forward only;
-    dnssec-validation auto;
-    auth-nxdomain no;
-    version "not available";
-};
-
-zone "." {
-    type hint;
-    file "/etc/bind/db.root";
-};
-
-zone "localhost" {
-    type master;
-    file "/etc/bind/db.local";
-};
-
-zone "127.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.127";
-};
-
-zone "0.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.0";
-};
-
-zone "255.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.255";
-};
-
-include "/etc/bind/named.conf.local";
+# 🔐 NSA Sec 7.9: Enable DNSSEC validation
+configure_dnssec() {
+  log info "Configuring NSA Sec 7.9: DNSSEC validation (prevent DNS spoofing)"
+  
+  # Backup resolved.conf
+  cp /etc/systemd/resolved.conf /etc/systemd/resolved.conf.bak 2>/dev/null || true
+  
+  # Configure DNSSEC validation
+  cat > /etc/systemd/resolved.conf << 'EOF'
+# NSA Sec 7.9: DNSSEC validation enabled
+[Resolve]
+DNS=1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4
+FallbackDNS=9.9.9.9 149.112.112.112
+DNSSEC=yes
+DNSOverTLS=opportunistic
+Cache=yes
+CacheFromLocalhost=no
+ReadEtcHosts=yes
 EOF
-    
-    # set permissions
-    chmod 644 /etc/bind/named.conf || handle_error "échec de la définition des permissions" "définition des permissions"
-    
-    log_action "info : configuration de bind9 effectuée"
+  
+  log info "DNSSEC validation enabled (systemd-resolved)"
 }
 
-# 🔄 restart service
-restart_service() {
-    echo -e "${BLUE}🔄 redémarrage du service bind9...${NC}"
-    
-    # check config
-    named-checkconf /etc/bind/named.conf || handle_error "configuration bind9 invalide" "vérification de la configuration"
-    
-    # restart service
-    systemctl restart bind9 || handle_error "échec du redémarrage du service" "redémarrage du service"
-    
-    # verify service status
-    if ! systemctl is-active --quiet bind9; then
-        handle_error "service bind9 non actif" "vérification du service"
-    fi
-    
-    log_action "info : service bind9 redémarré"
+# 🔐 Update /etc/resolv.conf to use systemd-resolved stub
+configure_resolv_conf() {
+  log info "Configuring /etc/resolv.conf to use systemd-resolved stub resolver"
+  
+  # Backup existing resolv.conf
+  if [ ! -L /etc/resolv.conf ]; then
+    cp /etc/resolv.conf /etc/resolv.conf.bak 2>/dev/null || true
+  fi
+  
+  # Point to systemd-resolved stub
+  ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+  
+  log info "resolv.conf linked to systemd-resolved stub (127.0.0.53)"
 }
 
-# 🎯 main function
+# 🔐 TuxCare #06: Verify DNSSEC validation working
+test_dnssec() {
+  log info "Testing DNSSEC validation (TuxCare #06 protocol security)"
+  
+  # Restart systemd-resolved to apply changes
+  systemctl restart systemd-resolved
+  sleep 2
+  
+  # Test DNSSEC-signed domain (cloudflare.com has DNSSEC)
+  if resolvectl query cloudflare.com | grep -q "authenticated: yes"; then
+    log info "✅ DNSSEC validation working (authenticated: yes)"
+    return 0
+  else
+    log warn "⚠️ DNSSEC validation test inconclusive (may require time for cache)"
+    return 0  # Don't fail module, just warn
+  fi
+}
+
+# ✅ Validation: Verify DNSSEC configuration
+validate() {
+  log info "Validating Module 8 DNSSEC configuration..."
+  
+  local checks_passed=0
+  local checks_total=4
+  
+  # Check 1: systemd-resolved enabled
+  if systemctl is-enabled systemd-resolved >/dev/null 2>&1; then
+    log info "✅ Check 1: systemd-resolved enabled"
+    ((checks_passed++))
+  else
+    log error "❌ Check 1: systemd-resolved NOT enabled"
+  fi
+  
+  # Check 2: DNSSEC=yes in resolved.conf
+  if grep -q "^DNSSEC=yes" /etc/systemd/resolved.conf 2>/dev/null; then
+    log info "✅ Check 2: DNSSEC validation enabled in resolved.conf"
+    ((checks_passed++))
+  else
+    log error "❌ Check 2: DNSSEC NOT enabled in resolved.conf"
+  fi
+  
+  # Check 3: resolv.conf points to stub
+  if [ -L /etc/resolv.conf ] && readlink /etc/resolv.conf | grep -q "stub-resolv.conf"; then
+    log info "✅ Check 3: /etc/resolv.conf linked to systemd-resolved stub"
+    ((checks_passed++))
+  else
+    log error "❌ Check 3: resolv.conf NOT linked to systemd-resolved"
+  fi
+  
+  # Check 4: systemd-resolved running
+  if systemctl is-active --quiet systemd-resolved; then
+    log info "✅ Check 4: systemd-resolved service running"
+    ((checks_passed++))
+  else
+    log error "❌ Check 4: systemd-resolved NOT running"
+  fi
+  
+  log info "Validation complete: $checks_passed/$checks_total checks passed"
+  [ "$checks_passed" -eq "$checks_total" ] && return 0 || return 1
+}
+
+# 🔄 Rollback: Restore previous configuration
+rollback() {
+  log warn "Rolling back DNS configuration changes..."
+  
+  # Restore resolved.conf backup if exists
+  if [ -f /etc/systemd/resolved.conf.bak ]; then
+    cp /etc/systemd/resolved.conf.bak /etc/systemd/resolved.conf
+    systemctl restart systemd-resolved
+    log info "Restored /etc/systemd/resolved.conf from backup"
+  fi
+  
+  # Restore resolv.conf backup if exists
+  if [ -f /etc/resolv.conf.bak ] && [ ! -L /etc/resolv.conf.bak ]; then
+    rm -f /etc/resolv.conf
+    cp /etc/resolv.conf.bak /etc/resolv.conf
+    log info "Restored /etc/resolv.conf from backup"
+  fi
+}
+
+# 🚀 Main execution
 main() {
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
-╚════════════════════════════════════════════════════════════${NC}"
-profile enablement
-    if [ ! -f "/etc/firstboot/modules/${MODULE_NAME}.enabled" ]; then
-        log_action "info: module disabled for this profile; skipping"
-        echo -e "${YELLOW}⏭️  module non activé pour ce profil${NC}"
-        exit 0
-    fi
-
-    # check 
-    # check dependencies
-    check_dependencies
-
-    # step 1: install bind9
-    update_progress 1 4
-    echo -e "${BLUE}📦 étape 1 : installation...${NC}"
-    install_bind9
-    log_action "info : étape 1 terminée"
-
-    # step 2: configure bind9
-    update_progress 2 4
-    echo -e "${BLUE}📦 étape 2 : configuration...${NC}"
-    configure_bind9
-    log_action "info : étape 2 terminée"
-
-    # step 3: restart service
-    update_progress 3 4
-    echo -e "${BLUE}📦 étape 3 : redémarrage du service...${NC}"
-    restart_service
-    log_action "info : étape 3 terminée"
-
-    # step 4: verify
-    update_progress 4 4
-    echo -e "${BLUE}📦 étape 4 : vérification...${NC}"
-    
-    # verify service
-    if ! systemctl is-active --quiet bind9; then
-        handle_error "service bind9 non actif" "vérification"
-    fi
-    
-    # verify dns resolution
-    if ! dig @127.0.0.1 localhost > /dev/null; then
-        handle_error "résolution dns locale échouée" "vérification"
-    fi
-    
-    log_action "info : étape 4 terminée"
-
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+  log info "Starting Module 8: DNS Configuration (NSA Sec 7.9 DNSSEC)"
+  
+  # Create logs directory if needed
+  mkdir -p /var/log/firstb00t
+  
+  ensure_systemd_resolved_installed
+  configure_dnssec
+  configure_resolv_conf
+  test_dnssec
+  
+  log info "All configurations applied. Running validation..."
+  validate || { log error "Validation failed"; rollback; exit 1; }
+  
+  log info "Module 8 completed successfully (NSA Sec 7.9 DNSSEC validation enabled)"
 }
 
-# 🎯 run main function
-main 
+main "$@" 

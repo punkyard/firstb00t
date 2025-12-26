@@ -1,4 +1,4 @@
-![[punkyard-firstb00t.png]]
+![](docs/punkyard-firstb00t.png)
 
 # 🚀 Firstb00t — your Debian server's first safe steps
 

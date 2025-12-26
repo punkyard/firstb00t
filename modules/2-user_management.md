@@ -2,123 +2,273 @@
 
 ## 🎯 Purpose
 
-ce module gère la création d'un utilisateur sudo avec les privilèges appropriés. il assure que l'utilisateur est correctement configuré avec un mot de passe fort et les permissions nécessaires.
+Enforce NSA Sec 4.x-5.x authentication hardening and credential hygiene policies:
+- NSA Sec 5.2: 15+ character password minimum (pwquality enforcement)
+- NSA Sec 4.3: Comprehensive authentication logging (syslog + /var/log/auth.log)
+- NSA Sec 4.6: Account lockout after failed attempts (pam_faillock)
+- TuxCare #09: Prevent weak credentials (enforce password complexity)
+- TuxCare #03: Enable security monitoring (auth event tracking)
 
 ## 🔗 Dependencies
 
-- useradd: création d'utilisateurs
-- usermod: modification d'utilisateurs
-- passwd: gestion des mots de passe
-- groupadd: création de groupes
+- libpam-pwquality: PAM password quality enforcement (15+ char minimum, complexity rules)
+- libpam-faillock: Account lockout mechanism (5 failures → 30 min lockout)
+- rsyslog: Authentication logging to syslog and /var/log/auth.log
 
 ## ⚙️ Configuration
 
-### Required Settings
+### A. NSA Sec 5.2: Password Policy (/etc/security/pwquality.conf)
 
-- nom d'utilisateur: doit être unique
-- mot de passe: doit respecter les critères de sécurité
+```bash
+minlen = 15          # NSA Sec 5.2: mandatory 15+ character minimum
+dcredit = -1         # require at least 1 digit
+ucredit = -1         # require at least 1 uppercase letter
+lcredit = -1         # require at least 1 lowercase letter
+ocredit = -1         # require at least 1 special character
+difok = 8            # at least 8 characters different from old password (NSA Sec 5.3)
+maxrepeat = 2        # no more than 2 repeated consecutive characters
+usercheck = 1        # reject passwords containing username
+enforce_for_root     # enforce policy for root account (critical)
+```
 
-### Optional Settings
+**Effect:** All passwords (user + root) must be 15+ chars with upper, lower, digit, special char
 
-- aucun paramètre optionnel
+### B. NSA Sec 5.1: Strong Password Hashing (PAM Configuration)
+
+**PAM Common-Password Stack:**
+```bash
+# pam_pwquality.so: Enforce password strength before hashing
+password    requisite   pam_pwquality.so retry=3
+
+# pam_unix.so: SHA-512 with 10,000 rounds (equivalent to Cisco Type 8 PBKDF2-SHA256)
+password    [success=1 default=ignore]    pam_unix.so obscure use_authtok try_first_pass yescrypt sha512 rounds=10000
+```
+
+**Files Modified:**
+- `/etc/pam.d/common-password` — Enforce pwquality + SHA-512 hashing
+- `/etc/libuser.conf` — Ensure new users created with SHA-512: `crypt_style = sha512`
+
+**Verification:**
+```bash
+# New passwords use $6$ (SHA-512) prefix
+grep root /etc/shadow | head -c 20
+
+# Check PAM configuration
+grep sha512 /etc/pam.d/common-password
+grep rounds /etc/pam.d/common-password
+```
+
+**Syslog Integration:**
+- pam_syslog.so in common-session stack → logs all auth events
+- rsyslog.d/50-user-management.conf → routes to /var/log/auth.log
+- Centralization-ready for SIEM integration
+
+**Auditable Events:**
+- Successful logins (local/SSH)
+- Failed login attempts (tracked per source)
+- Privilege escalation (sudo commands)
+- Password changes
+- Account lockout/unlock
+
+### D. NSA Sec 4.6: Account Lockout (pam_faillock)
+
+```bash
+deny=3              # NSA Sec 4.6: lock account after 3 failed attempts (not 5)
+fail_interval=900   # reset counter after 15 minutes
+unlock_time=1800    # 30-minute lockout period
+audit               # log to audit system
+```
+
+**Configuration:**
+- `/etc/security/faillock.conf` — Faillock parameters
+- `/etc/pam.d/common-auth` — Integrated into PAM auth stack (preauth + authfail)
+
+**Behavior:**
+- Blocks further login attempts after 3 failures for 30 minutes
+- Applies to all accounts including root
+- Admin reset: `sudo faillock --user username --reset`
+
+**Verification:**
+```bash
+grep pam_faillock /etc/pam.d/common-auth
+cat /etc/security/faillock.conf
+```
+
+### D. Sudo Hardening
+
+- Require password for all sudo operations (PAM integration)
+- Use PTY (pseudo-terminal) for sudo sessions (prevents TTY bypass)
+- Enforced via /etc/sudoers.d/hardening rules
 
 ## 🚨 Error Handling
 
-### Common Errors
+### Common Issues
 
-1. nom d'utilisateur vide
+A. Password rejected with "failed strength check"
+   - cause: password < 15 chars or missing complexity requirement
+   - solution: use 15+ chars with upper, lower, digit, special char
+   - test: `echo "TestPassword123!" | xargs echo` (17 chars, all requirements)
 
-   - cause: entrée utilisateur vide
-   - solution: fournir un nom d'utilisateur valide
-   - prevention: validation de l'entrée
-2. mot de passe trop faible
+B. Account locked after 5 failed attempts
+   - cause: brute-force protection (expected behavior)
+   - solution: wait 30 minutes or admin reset
+   - admin: `sudo faillock --user username --reset`
 
-   - cause: ne respecte pas les critères de sécurité
-   - solution: utiliser un mot de passe plus fort
-   - prevention: validation du mot de passe
-3. échec de création d'utilisateur
-
-   - cause: conflit de noms ou permissions insuffisantes
-   - solution: utiliser un autre nom ou vérifier les permissions
-   - prevention: vérification préalable
+C. pam_pwquality.so not found
+   - cause: libpam-pwquality not installed
+   - solution: `apt-get install libpam-pwquality`
 
 ### Recovery Procedures
 
-1. nettoyage en cas d'échec
-   - suppression de l'utilisateur partiellement créé
-   - suppression des fichiers temporaires
-2. restauration des permissions
-   - vérification des permissions du répertoire home
-   - vérification des permissions .ssh
-3. vérification
-   - confirmation de la suppression
-   - vérification de l'état du système
+A. Unlock account immediately
+   - `faillock --user username --reset` (as root)
+
+B. Bypass pwquality temporarily (emergency)
+   - Edit /etc/security/pwquality.conf, lower minlen
+   - Not recommended (security risk)
+
+C. Restore default PAM configuration
+   - Restore from /etc/pam.d/common-password.bak
+   - Re-run module with rollback on failure
+
+## 📊 Testing & Validation
+
+**Test Suite:** `tests/modules/2-user_management/test_validation.sh`
+
+**Test Coverage (5 checks):**
+1. ✅ libpam-pwquality installed
+2. ✅ pwquality.conf: minlen=15, complexity enforced
+3. ✅ PAM pam_pwquality.so integration in common-password
+4. ✅ Auth logging (syslog) configured
+5. ✅ Account lockout (pam_faillock, 5 failures → 30 min) configured
+
+**Manual Test:**
+```bash
+# Test 1: Password too short
+sudo passwd testuser
+# Enter: "short"
+# Expected: "failed strength check (too short)"
+
+# Test 2: Password without digit
+sudo passwd testuser
+# Enter: "ValidPasswordNoDigit!"
+# Expected: "failed strength check (need digits)"
+
+# Test 3: Valid password
+sudo passwd testuser
+# Enter: "ValidPassword123!"
+# Expected: "password updated successfully"
+```
+
+## 🔒 Security Notes
+
+- **Password Storage:** Uses SHA-512 hashing (modern Debian default, NSA Sec 5.1 compliant)
+- **Failed Attempts:** Tracked in /var/log/faillog and syslog (forensics-ready)
+- **Root Protection:** pwquality and faillock apply to root (strong enforcement)
+- **PAM Stack:** Changes affect all login methods (local, SSH, su, sudo)
+
+## 📋 TuxCare Top 10 Mapping
+
+| TuxCare | Status | Implementation |
+|---------|--------|-----------------|
+| #07 Missing MFA | ⏳ Phase 3 | Future: pam-google-authenticator |
+| #09 Weak credentials | ✅ **FIXED** | 15+ char + complexity via pwquality |
+| #03 No monitoring | ✅ **FIXED** | Syslog + /var/log/auth.log |
+| #04 Network gaps | SSH Module 3 | IP-based ACLs |
+
+## 🔮 Future Enhancements (Phase 3)
+
+A. **TOTP-based MFA** (NSA Sec 4.2 RBAC)
+   - pam-google-authenticator
+   - Enforce for sudo escalation
+   - Optional for regular login
+
+B. **Centralized AAA** (LDAP/RADIUS)
+   - pam-ldap configuration
+   - Enterprise account integration
+
+C. **Password Expiry Policy** (NSA Sec 5.5)
+   - chage enforcement: 90-day rotation
+   - Prevent reuse of last 5 passwords
+
+## 📚 References
+
+- NSA Network Infrastructure Security Guide (U/OO/118623-22, Oct 2023)
+  - Sec 4.1-4.6: AAA and authentication hardening
+  - Sec 5.1-5.3: Password policies and strength requirements
+- TuxCare Top 10 Cybersecurity Misconfigurations Playbook
+- PAM Documentation: https://linux.die.net/man/5/pam.conf
+- pwquality Reference: https://linux.die.net/man/5/pwquality.conf
+   - verify .ssh permissions
+C. verify
+   - confirm deletion
+   - verify system status
 
 ## 🔄 Integration
 
 ### Input
 
-- entrée utilisateur pour le nom
-- entrée utilisateur pour le mot de passe
+- user input for name
+- user input for password
 
 ### Output
 
-- utilisateur créé avec sudo
-- répertoire .ssh configuré
-- permissions définies
+- user created with sudo
+- .ssh directory configured
+- permissions set
 
 ## 📊 Validation
 
-### Success Criteria
+### Success criteria
 
-- utilisateur existe dans /etc/passwd
-- utilisateur est dans le groupe sudo
-- répertoire .ssh existe avec les bonnes permissions
-- mot de passe est défini
+- user exists in /etc/passwd
+- user is in sudo group
+- .ssh directory exists with correct permissions
+- password is set
 
-### Performance Metrics
+### Performance metrics
 
-- temps de création de l'utilisateur
-- temps de configuration des permissions
-- taille du répertoire home
+- user creation time
+- permission configuration time
+- home directory size
 
 ## 🧹 Cleanup
 
-### Temporary Files
+### Temporary files
 
-- /tmp/user-*: fichiers temporaires
-- /etc/passwd.bak: sauvegarde du fichier passwd
-- /etc/group.bak: sauvegarde du fichier group
+- /tmp/user-*: temporary files
+- /etc/passwd.bak: passwd file backup
+- /etc/group.bak: group file backup
 
-### Configuration Files
+### Configuration files
 
-- /etc/passwd: informations utilisateur
-- /etc/group: informations de groupe
-- /etc/sudoers: configuration sudo
+- /etc/passwd: user information
+- /etc/group: group information
+- /etc/sudoers: sudo configuration
 
 ## 📝 Logging
 
-### Log Files
+### Log files
 
-- /var/log/firstboot_script.log: actions du module
-- /var/log/auth.log: actions d'authentification
+- /var/log/firstboot_script.log: module actions
+- /var/log/auth.log: authentication actions
 
-### Log Levels
+### Log levels
 
-- info: actions normales
-- erreur: problèmes détectés
-- succès: opérations réussies
+- info: normal actions
+- error: detected problems
+- success: successful operations
 
 ## 🔧 Maintenance
 
-### Regular Tasks
+### Regular tasks
 
-- vérification des permissions
-- vérification des groupes
-- vérification des mots de passe
+- verify permissions
+- verify groups
+- verify passwords
 
 ### Updates
 
-- mise à jour des critères de mot de passe
-- mise à jour des permissions
-- mise à jour des groupes
+- update password criteria
+- update permissions
+- update groups

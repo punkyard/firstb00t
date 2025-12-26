@@ -2,113 +2,114 @@
 
 ## 🎯 Purpose
 
-ce module gère la mise à jour initiale du système debian. il assure que tous les paquets sont à jour et que le système est prêt pour les installations suivantes.
+This module manages initial Debian system updates. It ensures all packages are up to date and the system is ready for subsequent installations.
 
 ## 🔗 Dependencies
 
-- apt: gestionnaire de paquets principal
-- apt-get: outil de gestion des paquets
+- apt: main package manager
+- apt-get: package management tool
 
 ## ⚙️ Configuration
 
-### Required Settings
+### Required settings
 
-- aucun paramètre requis
+- no parameters required
 
-### Optional Settings
+### Optional settings
 
-- aucun paramètre optionnel
+- no optional parameters
 
-## 🚨 Error Handling
+## 🚨 Error handling
 
-### Common Errors
+### Common errors
 
-1. échec de la mise à jour des listes de paquets
+A. package list update failure
+   - cause: internet connection problem or inaccessible repositories
+   - solution: check connection and apt sources
+   - prevention: verify apt sources before installation
 
-   - cause: problème de connexion internet ou dépôts inaccessibles
-   - solution: vérifier la connexion et les sources apt
-   - prevention: vérifier les sources apt avant l'installation
-2. échec de la mise à jour des paquets
+B. package update failure
+   - cause: package conflicts or insufficient disk space
+   - solution: resolve conflicts or free up space
+   - prevention: check disk space before installation
 
-   - cause: conflits de paquets ou espace disque insuffisant
-   - solution: résoudre les conflits ou libérer de l'espace
-   - prevention: vérifier l'espace disque avant l'installation
+### Recovery procedures
 
-### Recovery Procedures
+A. restore apt sources
+   - restore original sources.list file
+   - remove temporary files
 
-1. restauration des sources apt
-   - restaure le fichier sources.list original
-   - supprime les fichiers temporaires
-2. nettoyage du système
-   - supprime les paquets inutilisés
-   - nettoie le cache apt
-3. vérification
-   - vérifie l'état des sources apt
-   - vérifie l'espace disque disponible
+B. clean system
+   - remove unused packages
+   - clean apt cache
+
+C. verify
+   - check apt sources status
+   - check available disk space
 
 ## 🔄 Integration
 
 ### Input
 
-- fichier /etc/apt/sources.list
-- état actuel des paquets
+- file /etc/apt/sources.list
+- current package status
 
 ### Output
 
-- système à jour
-- paquets inutilisés supprimés
-- cache apt nettoyé
+- system up to date
+- unused packages removed
+- apt cache cleaned
 
 ## 📊 Validation
 
-### Success Criteria
+### Success criteria
 
-- toutes les listes de paquets sont à jour
-- tous les paquets sont mis à jour
-- aucun paquet inutilisé n'est présent
-- le cache apt est vide
+- all package lists are up to date
+- all packages are updated
+- no unused packages present
+- apt cache is empty
 
-### Performance Metrics
+### Performance metrics
 
-- temps de mise à jour
-- espace disque utilisé/liberé
-- nombre de paquets mis à jour
+- update time
+- disk space used/freed
+- number of packages updated
 
 ## 🧹 Cleanup
 
-### Temporary Files
+### Temporary files
 
-- /tmp/apt-update-*: fichiers de suivi
-- /etc/apt/sources.list.bak: sauvegarde des sources
+- /tmp/apt-update-*: tracking files
+- /etc/apt/sources.list.bak: sources backup
 
-### Configuration Files
+### Configuration files
 
-- /etc/apt/sources.list: configuration des dépôts
-- /var/log/apt/history.log: historique des mises à jour
+- /etc/apt/sources.list: repository configuration
+- /var/log/apt/history.log: update history
 
 ## 📝 Logging
 
-### Log Files
+### Log files
 
-- /var/log/firstboot_script.log: actions du module
-- /var/log/apt/history.log: actions apt
+- /var/log/firstboot_script.log: module actions
+- /var/log/apt/history.log: apt actions
 
-### Log Levels
+### Log levels
 
-- info: actions normales
-- erreur: problèmes détectés
-- succès: opérations réussies
+- info: normal actions
+- error: detected problems
+- success: successful operations
 
 ## 🔧 Maintenance
 
-### Regular Tasks
+### Regular tasks
 
-- vérification quotidienne des mises à jour
-- nettoyage hebdomadaire du cache
-- suppression mensuelle des paquets inutilisés
+- daily update checks
+- weekly cache cleanup
+- monthly unused package removal
 
 ### Updates
 
-- vérification des nouvelles versions de paquets
-- test des mises à jour majeures
-- validation des changements de configuration
+- check for new package versions
+- test major updates
+- validate configuration changes

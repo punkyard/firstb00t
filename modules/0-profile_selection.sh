@@ -9,43 +9,43 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
-# 📋 module information
+# 📋 Module information
 MODULE_NAME="profile_selection"
 MODULE_VERSION="1.0.0"
-MODULE_DESCRIPTION="sélection et configuration des profils de sécurité"
+MODULE_DESCRIPTION="security profile selection and configuration"
 MODULE_DEPENDENCIES=("systemctl" "apt")
 
-# 📝 logging function
+# 📝 Logging function
 log_action() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> /var/log/firstboot_script.log
 }
 
-# 🚨 error handling
+# 🚨 Error handling
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 erreur détectée à l'étape $error_step : $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
+    log_action "error: interruption at step $error_step: $error_message"
     cleanup
     exit 1
 }
 
-# 🧹 cleanup function
+# 🧹 Cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 Cleaning up...${NC}"
     # restore original config if needed
     if [ -f /etc/firstboot/profile.bak ]; then
         mv /etc/firstboot/profile.bak /etc/firstboot/profile
     fi
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
-# 🔄 check dependencies
+# 🔄 Check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 Checking dependencies...${NC}"
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
     echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
@@ -84,7 +84,126 @@ assess_system() {
     log_action "info : évaluation du système terminée"
 }
 
-# ⚙️ select profile
+# ⚙️ Configure SSH port
+configure_ssh_port() {
+    echo ""
+    echo "🔒 SSH Port Configuration"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Default port 22 is a common target for attacks."
+    echo "Standard secure port: 22022"
+    echo ""
+    read -p "Enter SSH port (default 22022): " ssh_port
+    
+    # Validate port
+    if [ -z "$ssh_port" ]; then
+        ssh_port="22022"
+    fi
+    
+    if ! [[ "$ssh_port" =~ ^[0-9]+$ ]] || [ "$ssh_port" -lt 1024 ] || [ "$ssh_port" -gt 65535 ]; then
+        echo "❌ Invalid port. Using default 22022"
+        ssh_port="22022"
+    fi
+    
+    # Export for SSH modules
+    export SSH_PORT="$ssh_port"
+    echo "$ssh_port" > /etc/firstboot/ssh_port
+    echo "✅ SSH port configured: ${ssh_port}"
+    log_action "info : SSH port configured to ${ssh_port}"
+}
+
+# 📧 Configure admin email
+configure_admin_email() {
+    echo ""
+    echo "📧 Administrator Email Configuration"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Email address for security alerts and system notifications:"
+    echo "- Fail2ban intrusion alerts"
+    echo "- AIDE file integrity reports"
+    echo "- Lynis vulnerability scan results"
+    echo "- Certificate expiry warnings"
+    echo ""
+    read -p "Enter admin email (e.g., admin@example.com): " admin_email
+    
+    # Validate email format (basic check)
+    if [ -z "$admin_email" ]; then
+        echo "⚠️  No email provided. Using root@localhost (local only)"
+        admin_email="root@localhost"
+    elif ! [[ "$admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        echo "⚠️  Invalid email format. Using root@localhost"
+        admin_email="root@localhost"
+    fi
+    
+    # Export for modules
+    export ADMIN_EMAIL="$admin_email"
+    echo "$admin_email" > /etc/firstboot/admin_email
+    echo "✅ Admin email configured: ${admin_email}"
+    log_action "info : Admin email configured to ${admin_email}"
+}
+
+# 🍯 Configure SSH honeypot
+configure_ssh_honeypot() {
+    echo ""
+    echo "🍯 SSH Honeypot Configuration (Port 22 Trap)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Leave port 22 open as a honeypot to trap attackers?"
+    echo "- Any connection attempt to port 22 = permanent ban"
+    echo "- Your management IP will be whitelisted"
+    echo "- SSH will run on the secure port configured above"
+    echo ""
+    
+    # Auto-detect user's source IP from SSH session
+    local detected_ip=""
+    if [ -n "$SSH_CONNECTION" ]; then
+        detected_ip=$(echo "$SSH_CONNECTION" | awk '{print $1}')
+        echo "🔍 Auto-detected your IP: ${detected_ip}"
+    elif [ -n "$SSH_CLIENT" ]; then
+        detected_ip=$(echo "$SSH_CLIENT" | awk '{print $1}')
+        echo "🔍 Auto-detected your IP: ${detected_ip}"
+    else
+        echo "⚠️  Could not auto-detect IP (not running via SSH)"
+    fi
+    
+    read -p "Enable port 22 honeypot? (y/N): " enable_honeypot
+    
+    if [[ "$enable_honeypot" =~ ^[Yy]$ ]]; then
+        echo ""
+        if [ -n "$detected_ip" ]; then
+            echo "Detected IP: ${detected_ip}"
+            read -p "Use this IP for whitelist? (Y/n): " use_detected
+            if [[ "$use_detected" =~ ^[Nn]$ ]]; then
+                read -p "Enter management IP (CIDR, e.g., 203.0.113.45/32): " mgmt_ip
+            else
+                # Add /32 if no CIDR notation
+                if [[ "$detected_ip" =~ / ]]; then
+                    mgmt_ip="$detected_ip"
+                else
+                    mgmt_ip="${detected_ip}/32"
+                fi
+            fi
+        else
+            read -p "Enter management IP (CIDR, e.g., 203.0.113.45/32): " mgmt_ip
+        fi
+        
+        if [ -z "$mgmt_ip" ]; then
+            echo "❌ No IP provided. Honeypot disabled for safety."
+            export HONEYPOT_ENABLED="false"
+        else
+            export HONEYPOT_ENABLED="true"
+            export HONEYPOT_WHITELIST_IP="$mgmt_ip"
+            echo "true" > /etc/firstboot/honeypot_enabled
+            echo "$mgmt_ip" > /etc/firstboot/honeypot_whitelist_ip
+            echo "✅ Honeypot enabled. Whitelisted IP: ${mgmt_ip}"
+            log_action "info : SSH honeypot enabled with whitelist ${mgmt_ip}"
+        fi
+    else
+        export HONEYPOT_ENABLED="false"
+        echo "false" > /etc/firstboot/honeypot_enabled
+        echo "⏭️  Honeypot disabled. Port 22 will be closed by firewall."
+        log_action "info : SSH honeypot disabled"
+    fi
+}
+
+# ⚙️ Select profile
 select_profile() {
     echo -e "${BLUE}⚙️ sélection du profil...${NC}"
     
@@ -136,36 +255,39 @@ configure_profile() {
             # enable basic modules
             touch /etc/firstboot/modules/1-system_updates.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/9-monitoring.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/10-monitoring.enabled
             ;;
         "standard")
             # standard profile configuration
             echo -e "${BLUE}📦 configuration du profil standard...${NC}"
             # enable standard modules
             touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/5-fail2ban.enabled
-            touch /etc/firstboot/modules/6-ssl_config.enabled
-            touch /etc/firstboot/modules/7-dns_config.enabled
-            touch /etc/firstboot/modules/8-mail_config.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/6-fail2ban.enabled
+            touch /etc/firstboot/modules/7-ssl_config.enabled
+            touch /etc/firstboot/modules/8-dns_config.enabled
+            touch /etc/firstboot/modules/9-mail_config.enabled
             ;;
         "advanced")
             # advanced profile configuration
             echo -e "${BLUE}📦 configuration du profil advanced...${NC}"
             # enable all modules
             touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/4-firewall_config.enabled
-            touch /etc/firstboot/modules/3-ssh_hardening.enabled
             touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/5-fail2ban.enabled
-            touch /etc/firstboot/modules/6-ssl_config.enabled
-            touch /etc/firstboot/modules/7-dns_config.enabled
-            touch /etc/firstboot/modules/8-mail_config.enabled
-            touch /etc/firstboot/modules/9-monitoring.enabled
+            touch /etc/firstboot/modules/3-ssh_config.enabled
+            touch /etc/firstboot/modules/4-ssh_hardening.enabled
+            touch /etc/firstboot/modules/5-firewall_config.enabled
+            touch /etc/firstboot/modules/6-fail2ban.enabled
+            touch /etc/firstboot/modules/7-ssl_config.enabled
+            touch /etc/firstboot/modules/8-dns_config.enabled
+            touch /etc/firstboot/modules/9-mail_config.enabled
+            touch /etc/firstboot/modules/10-monitoring.enabled
             ;;
     esac
     
@@ -210,22 +332,40 @@ main() {
     log_action "info : étape 1 terminée"
 
     # step 2: select profile
-    update_progress 2 4
+    update_progress 2 5
     echo -e "${BLUE}📦 étape 2 : sélection du profil...${NC}"
     select_profile
     log_action "info : étape 2 terminée"
-
-    # step 3: configure profile
-    update_progress 3 4
-    echo -e "${BLUE}📦 étape 3 : configuration du profil...${NC}"
-    configure_profile
+    
+    # step 3: configure SSH port
+    update_progress 3 7
+    echo -e "${BLUE}📦 étape 3 : configuration du port SSH...${NC}"
+    configure_ssh_port
     log_action "info : étape 3 terminée"
-
-    # step 4: validate profile
-    update_progress 4 4
-    echo -e "${BLUE}📦 étape 4 : validation du profil...${NC}"
-    validate_profile
+    
+    # step 4: configure admin email
+    update_progress 4 7
+    echo -e "${BLUE}📦 étape 4 : configuration de l'email administrateur...${NC}"
+    configure_admin_email
     log_action "info : étape 4 terminée"
+    
+    # step 5: configure SSH honeypot
+    update_progress 5 7
+    echo -e "${BLUE}📦 étape 5 : configuration du honeypot SSH...${NC}"
+    configure_ssh_honeypot
+    log_action "info : étape 5 terminée"
+
+    # step 6: configure profile
+    update_progress 6 7
+    echo -e "${BLUE}📦 étape 6 : configuration du profil...${NC}"
+    configure_profile
+    log_action "info : étape 6 terminée"
+
+    # step 7: validate
+    update_progress 7 7
+    echo -e "${BLUE}📦 étape 7 : validation du profil...${NC}"
+    validate_profile
+    log_action "info : étape 7 terminée"
 
     echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
     log_action "succès : installation du module $MODULE_NAME terminée"

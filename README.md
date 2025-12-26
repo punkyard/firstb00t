@@ -1,8 +1,12 @@
+![[punkyard-firstb00t.png]]
+
 # 🚀 Firstb00t — your Debian server's first safe steps
 
-Welcome! **Firstb00t** is an automated security setup for your brand-new Debian server. 
+[![Security Compliance](https://img.shields.io/badge/NSA%20Compliance-68%25-yellow)](https://github.com/punkyard/firstb00t) [![TuxCare Validated](https://img.shields.io/badge/TuxCare-Top%2010%20Misconfigurations-blue)](https://github.com/punkyard/firstb00t)
 
-Think of it as a trusted checklist that runs on your first day with a new VPS — making sure everything is locked down and secure, without you needing to be a Linux expert.
+**Firstb00t** is an automated security setup for your brand-new **Debian server**. 
+
+Think of it as a trusted checklist that runs on your very first connection to your new VPS — making sure everything is locked down and secure, without you needing to be a Linux expert.
 
 ---
 
@@ -18,12 +22,26 @@ You just spun up a fresh Debian server (on Contabo, Linode, DigitalOcean, or any
 
 **Firstb00t does all this automatically**, safely, and the right way. No scary commands. No guessing. Just run it, answer a few questions, and you're done.
 
+### 🛡️ Built on security standards
+
+Firstb00t implements **68% compliance** (28 of 41 requirements) with:
+- **NSA Network Infrastructure Security Guide** (U/OO/118623-22, October 2023)
+- **TuxCare Top 10 Cybersecurity Misconfigurations** cybersecurity playbook
+
+This means your server follows enterprise-grade security practices from day one, including:
+- ✅ System update rollback capability (timeshift snapshots)
+- ✅ APT signature verification enforcement
+- ✅ DNSSEC validation for DNS lookups
+- ✅ Multi-factor authentication (TOTP)
+- ✅ SSH key-based authentication only
+- ✅ Intrusion detection and log monitoring
+
 ---
 
-## 🎯 Who Is This For?
+## 🎯 Who is this for?
 
-- 🟢 **Beginners**: First server? No problem. We handle the hard stuff.
-- 🟡 **Small teams**: Deploy consistently across multiple servers.
+- 🟢 **beginners**: First server? No problem. We handle the hard stuff.
+- 🟡 **small teams**: Deploy consistently across multiple servers.
 - 🟢 **DevOps engineers**: Reproducible, auditable, idempotent.
 
 **You don't need to be a Linux expert.** If you can copy-paste commands and say yes to a few prompts, you're good.
@@ -35,7 +53,7 @@ You just spun up a fresh Debian server (on Contabo, Linode, DigitalOcean, or any
 <details>
 <summary>📖 <strong>click to expand SSH connection guide</strong></summary>
 
-### Step 1: Connect to Your Server
+### Step 1: Connect to your server
 
 **get your VPS credentials** from your provider (contabo, digitalocean, linode, etc.):
 - 🔑 IP address (e.g., `203.0.113.42`)
@@ -66,7 +84,7 @@ ssh root@YOUR_VPS_IP
 
 </details>
 
-### Step 2: Download & Run
+### Step 2: download & run
 ```bash
 # Download the script
 curl -O https://raw.githubusercontent.com/punkyard/firstb00t/main/debian-firstb00t.sh
@@ -78,57 +96,57 @@ chmod +x debian-firstb00t.sh
 bash debian-firstb00t.sh
 ```
 
-### Step 3: Answer Questions
+### Step 3: answer questions
 The script will ask you:
-- 🔹 **Which security level?** (Basic / Standard / Advanced)
-  - **Basic** = essentials (everyone needs this)
-  - **Standard** = production-ready (add email, SSL)
-  - **Advanced** = maximum security (intrusion detection)
-- 🔹 **What username for your login?** (e.g., `admin`)
+- 🔹 **which security level?** (BASIC / STANDARD / ADVANCED)
+  - **basic** = essentials (everyone needs this)
+  - **standard** = production-ready (add email, SSL)
+  - **advanced** = maximum security (intrusion detection)
+- 🔹 **what username for your login?** (e.g., `admin`)
 - 🔹 **SSH public key?** (paste your key for passwordless login)
 
 That's it. The script does the rest.
 
 ---
 
-## 📊 What Gets Installed?
+## 📊 What gets installed?
 
-### Basic Security (All Servers)
-- **System Updates** — Latest security patches
-- **User Management** — Create a safe login (non-root)
-- **SSH Hardening** — Stronger, safer remote access (port 22222)
-- **Firewall (UFW)** — Block bad traffic automatically
-- **Monitoring** — Watch for problems and log everything
+### BASIC security (all servers)
+- **system updates** — latest security patches
+- **user management** — create a safe login (non-root)
+- **SSH hardening** — stronger, safer remote access (port 22222)
+- **firewall (UFW)** — block bad traffic automatically
+- **monitoring** — watch for problems and log everything
 
-### Standard (Production Servers)
-All Basic, plus:
-- **Fail2Ban** — Block brute-force attacks
-- **SSL/TLS** — Certificates for HTTPS
-- **DNS Security** — Safer domain lookups
-- **Mail Setup** — Secure email (if you need it)
+### STANDARD (production servers)
+All basic, plus:
+- **Fail2Ban** — block brute-force attacks
+- **SSL/TLS** — certificates for HTTPS
+- **DNS Security** — safer domain lookups
+- **mail setup** — secure email (if you need it)
 
-### Advanced (High-Security)
-All Standard, plus:
+### ADVANCED (high-security)
+All standard, plus:
 - **Intrusion Detection** — OSSEC watches 24/7
-- **App Armor** — Extra container/app protection
-- **Custom Hardening** — For experts
+- **App Armor** — extra container/app protection
+- **Custom Hardening** — for experts
 
 ---
 
-## ✅ After It Finishes
+## ✅ After it finishes
 
-### Test Your New Login
+### Test your new login
 ```bash
 # SSH on the new port (22222)
 ssh -p 22222 admin@your-server-ip
 ```
 
-### Check The Firewall
+### Check the firewall
 ```bash
 sudo ufw status
 ```
 
-### View The Logs
+### View the logs
 ```bash
 # Everything that happened is logged here:
 less /var/log/firstboot/system_updates.log
@@ -138,10 +156,10 @@ less /var/log/firstboot/firewall.log
 
 ---
 
-## 🛡️ Security Features (Explained Simply)
+## 🛡️ Security features
 
 <details>
-<summary>📚 <strong>click to see security features explained</strong></summary>
+<summary><strong>click to see security features explained</strong></summary>
 
 For detailed feature descriptions and module documentation, see [modules-features.md](modules-features.md)
 
@@ -170,10 +188,10 @@ Logs everything that happens. If something goes wrong, you can see what happened
 
 ---
 
-## ⏮️ Oops, Something Broke?
+## ⏮️ Oops, something broke?
 
 <details>
-<summary>🔧 <strong>click for rollback & troubleshooting guide</strong></summary>
+<summary><strong>click for rollback & troubleshooting guide</strong></summary>
 
 Don't panic. Everything is **reversible**. Each change we make has a backup:
 
@@ -198,7 +216,7 @@ sudo ufw disable
 ## 🔄 Can I run it again?
 
 <details>
-<summary>🔁 <strong>click to learn about idempotence</strong></summary>
+<summary><strong>click to learn about idempotence</strong></summary>
 
 Yes! The script is **idempotent** — that means:
 - ✅ run it once = secure server
@@ -213,13 +231,11 @@ You can update your firewall rules, add a new user, change things — just re-ru
 
 ## 📚 Learn more
 
-- **Module Docs** — See `github/modules/` for what each step does
-- **Testing** — See `tests/` for how we validate everything
-- **Development** — See `.github/specs/` for the roadmap
+- read **module documentation** in [modules/](modules/) for detailed features and implementation guides
 
 ---
 
-## 🐛 Found a Bug?
+## 🐛 Found a bug?
 
 <details>
 <summary>📖 <strong>click for issue reporting guide</strong></summary>
@@ -244,7 +260,7 @@ This project is free software. You can use, modify, and redistribute it freely �
 
 GNU Affero General Public License v3 (AGPLv3) — see [LICENSE](./LICENSE)</br>
 
-made with ⏳ by <a href="https://github.com/punkyard">punkyard
+made with ⏳ by <a href="https://github.com/punkyard">punkyard</a>
 
 </div>
 

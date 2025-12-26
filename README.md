@@ -2,7 +2,7 @@
 
 # 🚀 Firstb00t — your Debian server's first safe steps
 
-[![NSA Security Compliance](https://img.shields.io/badge/NSA%20Compliance-68%25-yellow)](https://github.com/punkyard/firstb00t) [![TuxCare Validated](https://img.shields.io/badge/TuxCare-Top%2010%20Misconfigurations-blue)](https://tuxcare.com/wp-content/uploads/2024/04/TuxCare_Cybersecurity_Misconfigurations_playbook.pdf)
+[![NSA Security Compliance](https://img.shields.io/badge/NSA%20Compliance-68%25-yellow)](https://media.defense.gov/2022/Jun/15/2003018261/-1/-1/0/CTR_NSA_NETWORK_INFRASTRUCTURE_SECURITY_GUIDE_20220615.PDF) [![TuxCare Validated](https://img.shields.io/badge/TuxCare-Top%2010%20Misconfigurations-blue)](https://tuxcare.com/wp-content/uploads/2024/04/TuxCare_Cybersecurity_Misconfigurations_playbook.pdf)
 
 **Firstb00t** is an automated security setup for your brand-new **Debian server**. 
 

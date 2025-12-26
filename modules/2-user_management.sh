@@ -257,7 +257,7 @@ generate_mfa_secrets() {
   log info "SSH restarted with MFA enabled"
 }
 
-# �📊 Configure NSA Sec 4.3: Comprehensive authentication logging
+# 📊 Configure NSA Sec 4.3: Comprehensive authentication logging
 configure_auth_logging() {
   log info "Configuring NSA Sec 4.3: comprehensive auth attempt logging"
   

@@ -2,7 +2,7 @@
 
 # 🚀 Firstb00t — your Debian server's first safe steps
 
-[![Security Compliance](https://img.shields.io/badge/NSA%20Compliance-68%25-yellow)](https://github.com/punkyard/firstb00t) [![TuxCare Validated](https://img.shields.io/badge/TuxCare-Top%2010%20Misconfigurations-blue)](https://github.com/punkyard/firstb00t)
+[![NSA Security Compliance](https://img.shields.io/badge/NSA%20Compliance-68%25-yellow)](https://github.com/punkyard/firstb00t) [![TuxCare Validated](https://img.shields.io/badge/TuxCare-Top%2010%20Misconfigurations-blue)](https://tuxcare.com/wp-content/uploads/2024/04/TuxCare_Cybersecurity_Misconfigurations_playbook.pdf)
 
 **Firstb00t** is an automated security setup for your brand-new **Debian server**. 
 
@@ -25,8 +25,8 @@ You just spun up a fresh Debian server (on Contabo, Linode, DigitalOcean, or any
 ### 🛡️ Built on security standards
 
 Firstb00t implements **68% compliance** (28 of 41 requirements) with:
-- **NSA Network Infrastructure Security Guide** (U/OO/118623-22, October 2023)
-- **TuxCare Top 10 Cybersecurity Misconfigurations** cybersecurity playbook
+- [NSA Network Infrastructure Security Guide](https://media.defense.gov/2022/Jun/15/2003018261/-1/-1/0/CTR_NSA_NETWORK_INFRASTRUCTURE_SECURITY_GUIDE_20220615.PDF) (U/OO/118623-22, October 2023)
+- [TuxCare Top 10 Cybersecurity Misconfigurations](https://tuxcare.com/wp-content/uploads/2024/04/TuxCare_Cybersecurity_Misconfigurations_playbook.pdf) cybersecurity playbook
 
 This means your server follows enterprise-grade security practices from day one, including:
 - ✅ System update rollback capability (timeshift snapshots)
@@ -163,13 +163,13 @@ less /var/log/firstboot/firewall.log
 
 For detailed feature descriptions and module documentation, see [modules-features.md](modules-features.md)
 
-### 1. **System Updates**
+### 1. **System updates**
 We get all the latest security patches — like Windows Update, but for Linux.
 
-### 2. **User Management**
+### 2. **User management**
 Root is the "superuser" — dangerous to use every day. We create a safer daily user for you.
 
-### 3. **SSH Hardening**
+### 3. **SSH hardening**
 - move SSH to a custom port (port 22022 instead of 22)
 - require SSH keys (not passwords — much safer)
 - disable direct root login

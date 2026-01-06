@@ -253,41 +253,41 @@ configure_profile() {
             # basic profile configuration
             echo -e "${BLUE}📦 configuration du profil basic...${NC}"
             # enable basic modules
-            touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/3-ssh_config.enabled
-            touch /etc/firstboot/modules/4-ssh_hardening.enabled
-            touch /etc/firstboot/modules/5-firewall_config.enabled
-            touch /etc/firstboot/modules/10-monitoring.enabled
+            touch /etc/firstboot/modules/02-system_updates.enabled
+            touch /etc/firstboot/modules/03-user_management.enabled
+            touch /etc/firstboot/modules/04-ssh_config.enabled
+            touch /etc/firstboot/modules/05-ssh_hardening.enabled
+            touch /etc/firstboot/modules/06-firewall_config.enabled
+            touch /etc/firstboot/modules/11-monitoring.enabled
             ;;
         "standard")
             # standard profile configuration
             echo -e "${BLUE}📦 configuration du profil standard...${NC}"
             # enable standard modules
-            touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/3-ssh_config.enabled
-            touch /etc/firstboot/modules/4-ssh_hardening.enabled
-            touch /etc/firstboot/modules/5-firewall_config.enabled
-            touch /etc/firstboot/modules/6-fail2ban.enabled
-            touch /etc/firstboot/modules/7-ssl_config.enabled
-            touch /etc/firstboot/modules/8-dns_config.enabled
-            touch /etc/firstboot/modules/9-mail_config.enabled
+            touch /etc/firstboot/modules/02-system_updates.enabled
+            touch /etc/firstboot/modules/03-user_management.enabled
+            touch /etc/firstboot/modules/04-ssh_config.enabled
+            touch /etc/firstboot/modules/05-ssh_hardening.enabled
+            touch /etc/firstboot/modules/06-firewall_config.enabled
+            touch /etc/firstboot/modules/07-fail2ban.enabled
+            touch /etc/firstboot/modules/08-ssl_config.enabled
+            touch /etc/firstboot/modules/09-dns_config.enabled
+            touch /etc/firstboot/modules/10-mail_config.enabled
             ;;
         "advanced")
             # advanced profile configuration
             echo -e "${BLUE}📦 configuration du profil advanced...${NC}"
             # enable all modules
-            touch /etc/firstboot/modules/1-system_updates.enabled
-            touch /etc/firstboot/modules/2-user_management.enabled
-            touch /etc/firstboot/modules/3-ssh_config.enabled
-            touch /etc/firstboot/modules/4-ssh_hardening.enabled
-            touch /etc/firstboot/modules/5-firewall_config.enabled
-            touch /etc/firstboot/modules/6-fail2ban.enabled
-            touch /etc/firstboot/modules/7-ssl_config.enabled
-            touch /etc/firstboot/modules/8-dns_config.enabled
-            touch /etc/firstboot/modules/9-mail_config.enabled
-            touch /etc/firstboot/modules/10-monitoring.enabled
+            touch /etc/firstboot/modules/02-system_updates.enabled
+            touch /etc/firstboot/modules/03-user_management.enabled
+            touch /etc/firstboot/modules/04-ssh_config.enabled
+            touch /etc/firstboot/modules/05-ssh_hardening.enabled
+            touch /etc/firstboot/modules/06-firewall_config.enabled
+            touch /etc/firstboot/modules/07-fail2ban.enabled
+            touch /etc/firstboot/modules/08-ssl_config.enabled
+            touch /etc/firstboot/modules/09-dns_config.enabled
+            touch /etc/firstboot/modules/10-mail_config.enabled
+            touch /etc/firstboot/modules/11-monitoring.enabled
             ;;
     esac
     

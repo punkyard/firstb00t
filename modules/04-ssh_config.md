@@ -86,7 +86,7 @@ The script validates:
 
 **Test Command:**
 ```bash
-bash tests/modules/3-ssh_config/validate.sh
+bash tests/modules/04-ssh_config/validate.sh
 ```
 
 ## 🧯 Rollback

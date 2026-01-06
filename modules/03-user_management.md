@@ -133,7 +133,7 @@ C. Restore default PAM configuration
 
 ## 📊 Testing & Validation
 
-**Test Suite:** `tests/modules/2-user_management/test_validation.sh`
+**Test Suite:** `tests/modules/03-user_management/test_validation.sh`
 
 **Test Coverage (5 checks):**
 1. ✅ libpam-pwquality installed

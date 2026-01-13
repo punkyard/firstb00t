@@ -27,62 +27,71 @@ log_action() {
 handle_error() {
     error_message="$1"
     error_step="$2"
-    echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    echo -e "${RED}🔴 ERROR at step '$error_step': $error_message${NC}"
+    log_action "error: interrupted at step '$error_step': $error_message"
     cleanup
     exit 1
 }
 
 # 🧹 cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 Cleaning up...${NC}"
     # restore original config if needed
     if [ -f /etc/ufw/before.rules.bak ]; then
         mv /etc/ufw/before.rules.bak /etc/ufw/before.rules
-        log_action "info : configuration ufw restaurée"
+        log_action "info: ufw config restored"
     fi
     # leave ufw running; only restore config
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
 # 🔄 check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 Checking dependencies...${NC}"
+    
+    # Install ufw if missing
+    if ! command -v ufw &> /dev/null; then
+        echo -e "${YELLOW}📦 Installing ufw...${NC}"
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq || handle_error "apt update failed" "dependency installation"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y ufw || handle_error "ufw installation failed" "dependency installation"
+        log_action "info: ufw installed successfully"
+    fi
+    
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
+    echo -e "${GREEN}✅ All dependencies satisfied${NC}"
+    log_action "info: dependency check passed"
 }
 
 # 📊 progress tracking
 update_progress() {
     current_step="$1"
     total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
+    echo -e "${BLUE}📊 Progress: $current_step/$total_steps${NC}"
 }
 
 # 🔒 configure firewall
 configure_firewall() {
-    echo -e "${BLUE}🔒 configuration du pare-feu...${NC}"
+    echo -e "${BLUE}🔒 Configuring firewall...${NC}"
     
     # backup original config
-    cp /etc/ufw/before.rules /etc/ufw/before.rules.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
+    cp /etc/ufw/before.rules /etc/ufw/before.rules.bak || handle_error "config backup failed" "backup config"
     
     # reset ufw to default
-    ufw --force reset || handle_error "échec de la réinitialisation du pare-feu" "réinitialisation"
+    ufw --force reset || handle_error "firewall reset failed" "reset"
     
     # set default policies (NSA Sec 2.1: deny-by-default)
-    ufw default deny incoming || handle_error "échec de la définition de la politique par défaut" "définition des politiques"
-    ufw default deny outgoing || handle_error "échec de la définition de la politique par défaut (egress)" "définition des politiques"
-    ufw default deny routed || handle_error "échec de la définition de la politique par défaut (routed)" "définition des politiques"
+    ufw default deny incoming || handle_error "setting default policy failed" "set policies"
+    ufw default deny outgoing || handle_error "setting default egress policy failed" "set policies"
+    ufw default deny routed || handle_error "setting default routed policy failed" "set policies"
     
     # NSA Sec 8.1: Enable uRPF anti-spoofing (kernel parameter)
-    echo -e "${BLUE}🛡️  activation de l'anti-spoofing uRPF...${NC}"
-    sysctl -w net.ipv4.conf.all.rp_filter=1 || handle_error "échec de l'activation uRPF" "uRPF"
-    sysctl -w net.ipv4.conf.default.rp_filter=1 || handle_error "échec de l'activation uRPF (default)" "uRPF"
+    echo -e "${BLUE}🛡️  Enabling uRPF anti-spoofing...${NC}"
+    sysctl -w net.ipv4.conf.all.rp_filter=1 || handle_error "uRPF activation failed" "uRPF"
+    sysctl -w net.ipv4.conf.default.rp_filter=1 || handle_error "uRPF default activation failed" "uRPF"
     # persist across reboots
     if ! grep -q "net.ipv4.conf.all.rp_filter" /etc/sysctl.conf 2>/dev/null; then
         echo "net.ipv4.conf.all.rp_filter=1" >> /etc/sysctl.conf
@@ -90,70 +99,71 @@ configure_firewall() {
     if ! grep -q "net.ipv4.conf.default.rp_filter" /etc/sysctl.conf 2>/dev/null; then
         echo "net.ipv4.conf.default.rp_filter=1" >> /etc/sysctl.conf
     fi
-    log_action "info : uRPF anti-spoofing activé"
+    log_action "info: uRPF anti-spoofing enabled"
     
     # NSA Sec 2.1: Egress filtering (allow essential outbound services only)
-    echo -e "${BLUE}🚪 configuration du filtrage de sortie...${NC}"
+    echo -e "${BLUE}🚪 Configuring egress filtering...${NC}"
     # allow DNS queries
-    ufw allow out 53/tcp comment 'Allow DNS TCP' || handle_error "échec règle DNS TCP sortante" "egress filtering"
-    ufw allow out 53/udp comment 'Allow DNS UDP' || handle_error "échec règle DNS UDP sortante" "egress filtering"
+    ufw allow out 53/tcp comment 'Allow DNS TCP' || handle_error "DNS TCP egress rule failed" "egress filtering"
+    ufw allow out 53/udp comment 'Allow DNS UDP' || handle_error "DNS UDP egress rule failed" "egress filtering"
     # allow HTTP/HTTPS for package updates
-    ufw allow out 80/tcp comment 'Allow HTTP' || handle_error "échec règle HTTP sortante" "egress filtering"
-    ufw allow out 443/tcp comment 'Allow HTTPS' || handle_error "échec règle HTTPS sortante" "egress filtering"
+    ufw allow out 80/tcp comment 'Allow HTTP' || handle_error "HTTP egress rule failed" "egress filtering"
+    ufw allow out 443/tcp comment 'Allow HTTPS' || handle_error "HTTPS egress rule failed" "egress filtering"
     # allow NTP
-    ufw allow out 123/udp comment 'Allow NTP' || handle_error "échec règle NTP sortante" "egress filtering"
+    ufw allow out 123/udp comment 'Allow NTP' || handle_error "NTP egress rule failed" "egress filtering"
     # allow SMTP outbound (for sending mail)
-    ufw allow out 25/tcp comment 'Allow SMTP' || handle_error "échec règle SMTP sortante" "egress filtering"
-    ufw allow out 587/tcp comment 'Allow SMTP submission' || handle_error "échec règle submission sortante" "egress filtering"
-    log_action "info : filtrage de sortie configuré (egress filtering)"
+    ufw allow out 25/tcp comment 'Allow SMTP' || handle_error "SMTP egress rule failed" "egress filtering"
+    ufw allow out 587/tcp comment 'Allow SMTP submission' || handle_error "submission egress rule failed" "egress filtering"
+    log_action "info: egress filtering configured"
     
     # allow ssh (configurable port, default 22222)
     SSH_PORT=${SSH_PORT:-22222}
-    ufw allow ${SSH_PORT}/tcp comment 'Allow SSH' || handle_error "échec de l'ouverture du port ssh" "configuration des règles"
+    ufw allow ${SSH_PORT}/tcp comment 'Allow SSH' || handle_error "SSH port opening failed" "rule configuration"
     
     # allow http/https
-    ufw allow 80/tcp comment 'Allow HTTP' || handle_error "échec de l'ouverture du port http" "configuration des règles"
-    ufw allow 443/tcp comment 'Allow HTTPS' || handle_error "échec de l'ouverture du port https" "configuration des règles"
+    ufw allow 80/tcp comment 'Allow HTTP' || handle_error "HTTP port opening failed" "rule configuration"
+    ufw allow 443/tcp comment 'Allow HTTPS' || handle_error "HTTPS port opening failed" "rule configuration"
     
     # allow dns
-    ufw allow 53/tcp comment 'Allow DNS TCP' || handle_error "échec de l'ouverture du port dns tcp" "configuration des règles"
-    ufw allow 53/udp comment 'Allow DNS UDP' || handle_error "échec de l'ouverture du port dns udp" "configuration des règles"
+    ufw allow 53/tcp comment 'Allow DNS TCP' || handle_error "DNS TCP port opening failed" "rule configuration"
+    ufw allow 53/udp comment 'Allow DNS UDP' || handle_error "DNS UDP port opening failed" "rule configuration"
     
     # allow smtp
-    ufw allow 25/tcp comment 'Allow SMTP' || handle_error "échec de l'ouverture du port smtp" "configuration des règles"
+    ufw allow 25/tcp comment 'Allow SMTP' || handle_error "SMTP port opening failed" "rule configuration"
     
     # allow imap/pop3
-    ufw allow 143/tcp comment 'Allow IMAP' || handle_error "échec de l'ouverture du port imap" "configuration des règles"
-    ufw allow 110/tcp comment 'Allow POP3' || handle_error "échec de l'ouverture du port pop3" "configuration des règles"
+    ufw allow 143/tcp comment 'Allow IMAP' || handle_error "IMAP port opening failed" "rule configuration"
+    ufw allow 110/tcp comment 'Allow POP3' || handle_error "POP3 port opening failed" "rule configuration"
     
     # allow submission
-    ufw allow 587/tcp comment 'Allow submission' || handle_error "échec de l'ouverture du port submission" "configuration des règles"
+    ufw allow 587/tcp comment 'Allow submission' || handle_error "submission port opening failed" "rule configuration"
     
     # NSA requirement: Enable logging for denied traffic (ACL logging)
-    ufw logging medium || handle_error "échec de l'activation des logs" "configuration des logs"
+    ufw logging medium || handle_error "enabling logs failed" "log configuration"
     
-    log_action "info : configuration du pare-feu effectuée"
+    log_action "info: firewall configuration completed"
 }
 
 # 🔄 restart service
 restart_service() {
-    echo -e "${BLUE}🔄 redémarrage du service ufw...${NC}"
+    echo -e "${BLUE}🔄 Restarting ufw service...${NC}"
     
     # enable ufw
-    ufw --force enable || handle_error "échec de l'activation du pare-feu" "activation du pare-feu"
+    ufw --force enable || handle_error "firewall activation failed" "firewall activation"
     
     # verify service status
     if ! systemctl is-active --quiet ufw; then
-        handle_error "service ufw non actif" "vérification du service"
+        handle_error "ufw service not active" "service verification"
     fi
     
-    log_action "info : service ufw redémarré"
+    log_action "info: ufw service restarted"
 }
 
 # 🎯 main function
 main() {
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
+║ ${GREEN}🚀 Installing module ${CYAN}$MODULE_NAME${GREEN}...
+║${CYAN}
 ╚════════════════════════════════════════════════════════════${NC}"
 
     # check dependencies
@@ -161,34 +171,34 @@ main() {
 
     # step 1: configure firewall
     update_progress 1 3
-    echo -e "${BLUE}📦 étape 1 : configuration...${NC}"
+    echo -e "${BLUE}📦 Step 1: Configuring...${NC}"
     configure_firewall
-    log_action "info : étape 1 terminée"
+    log_action "info: step 1 completed"
 
     # step 2: restart service
     update_progress 2 3
-    echo -e "${BLUE}📦 étape 2 : redémarrage du service...${NC}"
+    echo -e "${BLUE}📦 Step 2: Restarting service...${NC}"
     restart_service
-    log_action "info : étape 2 terminée"
+    log_action "info: step 2 completed"
 
     # step 3: verify
     update_progress 3 3
-    echo -e "${BLUE}📦 étape 3 : vérification...${NC}"
+    echo -e "${BLUE}📦 Step 3: Verifying...${NC}"
     
     # verify service
     if ! systemctl is-active --quiet ufw; then
-        handle_error "service ufw non actif" "vérification"
+        handle_error "ufw service not active" "verification"
     fi
     
     # verify rules
     if ! ufw status | grep -q "Status: active"; then
-        handle_error "pare-feu non actif" "vérification"
+        handle_error "firewall not active" "verification"
     fi
     
-    log_action "info : étape 3 terminée"
+    log_action "info: step 3 completed"
 
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+    echo -e "${GREEN}🎉 Module $MODULE_NAME installed successfully${NC}"
+    log_action "success: module $MODULE_NAME installation completed"
 }
 
 # 🎯 run main function

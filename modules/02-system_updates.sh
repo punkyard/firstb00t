@@ -352,49 +352,56 @@ check_dependencies() {
 update_progress() {
     current_step="$1"
     total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
+    echo -e "${BLUE}📊 Progress: $current_step/$total_steps${NC}"
 }
 
 # 🎯 main function
 main() {
+    echo ""
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
+║ ${GREEN}🚀 Installing module ${CYAN}$MODULE_NAME${GREEN}
 ╚════════════════════════════════════════════════════════════${NC}"
+    echo ""
 
     # check dependencies
     check_dependencies
 
     # step 1: backup and prepare
+    echo ""
     update_progress 1 4
-    echo -e "${BLUE}📦 étape 1 : préparation...${NC}"
+    echo -e "${BLUE}📦 Step 1: Preparing...${NC}"
     # backup sources list
     cp /etc/apt/sources.list /etc/apt/sources.list.bak
     # create temporary files
     touch /tmp/apt-update-$(date +%Y%m%d_%H%M%S)
-    log_action "info : étape 1 terminée"
+    log_action "info: step 1 completed"
 
     # step 2: update package lists
+    echo ""
     update_progress 2 4
-    echo -e "${BLUE}📦 étape 2 : mise à jour des listes de paquets...${NC}"
-    apt update || handle_error "échec de la mise à jour des listes de paquets" "mise à jour des listes"
-    log_action "info : étape 2 terminée"
+    echo -e "${BLUE}📦 Step 2: Updating package lists...${NC}"
+    apt update || handle_error "failed to update package lists" "package list update"
+    log_action "info: step 2 completed"
 
     # step 3: upgrade packages
+    echo ""
     update_progress 3 4
-    echo -e "${BLUE}📦 étape 3 : mise à jour des paquets...${NC}"
-    apt upgrade -y || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
-    log_action "info : étape 3 terminée"
+    echo -e "${BLUE}📦 Step 3: Upgrading packages...${NC}"
+    apt upgrade -y || handle_error "failed to upgrade packages" "package upgrade"
+    log_action "info: step 3 completed"
 
     # step 4: cleanup
+    echo ""
     update_progress 4 4
-    echo -e "${BLUE}🧹 étape 4 : nettoyage...${NC}"
-    apt autoremove -y || handle_error "échec du nettoyage" "nettoyage"
-    apt clean || handle_error "échec du nettoyage du cache" "nettoyage du cache"
-    log_action "info : étape 4 terminée"
+    echo -e "${BLUE}🧹 Step 4: Cleaning up...${NC}"
+    apt autoremove -y || handle_error "cleanup failed" "autoremove"
+    apt clean || handle_error "cache cleanup failed" "cache cleanup"
+    log_action "info: step 4 completed"
 
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+    echo ""
+    echo -e "${GREEN}🎉 Module $MODULE_NAME installed successfully${NC}"
+    log_action "success: module $MODULE_NAME installation completed"
 }
 
 # 🎯 run main function
-main 
+main

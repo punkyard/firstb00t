@@ -48,20 +48,20 @@ check_dependencies() {
             handle_error "missing dependency: $dep" "dependency check"
         fi
     done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
+    echo -e "${GREEN}✅ All dependencies satisfied${NC}"
+    log_action "info: dependency check passed"
 }
 
 # 📊 progress tracking
 update_progress() {
     current_step="$1"
     total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
+    echo -e "${BLUE}📊 Progress: $current_step/$total_steps${NC}"
 }
 
 # 🔍 assess system
 assess_system() {
-    echo -e "${BLUE}🔍 évaluation du système...${NC}"
+    echo -e "${BLUE}🔍 Assessing system...${NC}"
     
     # check system requirements
     total_mem=$(free -m | awk '/^Mem:/{print $2}')
@@ -69,23 +69,33 @@ assess_system() {
     cpu_cores=$(nproc)
     
     # log system info
-    log_action "info : mémoire totale : ${total_mem}MB"
-    log_action "info : espace disque : ${total_disk}GB"
-    log_action "info : cœurs cpu : ${cpu_cores}"
+    log_action "info: total memory: ${total_mem}MB"
+    log_action "info: disk space: ${total_disk}GB"
+    log_action "info: CPU cores: ${cpu_cores}"
     
     # verify minimum requirements
     if [ "$total_mem" -lt 1024 ]; then
-        handle_error "mémoire insuffisante (minimum 1GB requis)" "évaluation du système"
+        handle_error "insufficient memory (minimum 1GB required)" "system assessment"
     fi
     if [ "$total_disk" -lt 10 ]; then
-        handle_error "espace disque insuffisant (minimum 10GB requis)" "évaluation du système"
+        handle_error "insufficient disk space (minimum 10GB required)" "system assessment"
     fi
     
-    log_action "info : évaluation du système terminée"
+    log_action "info: system assessment completed"
 }
 
 # ⚙️ Configure SSH port
 configure_ssh_port() {
+    # Skip if non-interactive
+    if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
+        ssh_port="22022"
+        export SSH_PORT="$ssh_port"
+        echo "$ssh_port" > /etc/firstboot/ssh_port
+        echo "✅ SSH port configured: ${ssh_port} (default, non-interactive)"
+        log_action "info : SSH port configured to ${ssh_port} (non-interactive)"
+        return
+    fi
+    
     echo ""
     echo "🔒 SSH Port Configuration"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -113,6 +123,16 @@ configure_ssh_port() {
 
 # 📧 Configure admin email
 configure_admin_email() {
+    # Skip if non-interactive
+    if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
+        admin_email="root@localhost"
+        export ADMIN_EMAIL="$admin_email"
+        echo "$admin_email" > /etc/firstboot/admin_email
+        echo "✅ Admin email configured: ${admin_email} (default, non-interactive)"
+        log_action "info : Admin email configured to ${admin_email} (non-interactive)"
+        return
+    fi
+    
     echo ""
     echo "📧 Administrator Email Configuration"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -142,6 +162,15 @@ configure_admin_email() {
 
 # 🍯 Configure SSH honeypot
 configure_ssh_honeypot() {
+    # Skip if non-interactive
+    if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
+        export HONEYPOT_ENABLED="false"
+        echo "false" > /etc/firstboot/honeypot_enabled
+        echo "⏭️  Honeypot disabled (non-interactive mode)"
+        log_action "info : SSH honeypot disabled (non-interactive)"
+        return
+    fi
+    
     echo ""
     echo "🍯 SSH Honeypot Configuration (Port 22 Trap)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -205,28 +234,38 @@ configure_ssh_honeypot() {
 
 # ⚙️ Select profile
 select_profile() {
-    echo -e "${BLUE}⚙️ sélection du profil...${NC}"
+    echo ""
+    echo -e "${BLUE}⚙️ Selecting profile...${NC}"
     
-    # display available profiles
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 📋 profils disponibles :                                   
-║                                                            
-║ 🟢 basic    - sécurité essentielle                         
-║ 🟡 standard - sécurité équilibrée                         
-║ 🔴 advanced  - sécurité maximale                           
-╚════════════════════════════════════════════════════════════${NC}"
-    
-    # prompt for profile selection
-    read -p "choisir un profil (basic/standard/advanced) : " selected_profile
+    # Check if profile already specified via environment
+    if [ -n "${FIRSTBOOT_PROFILE:-}" ]; then
+        selected_profile="${FIRSTBOOT_PROFILE}"
+        echo -e "${GREEN}✅ Profile: ${selected_profile} (pre-selected)${NC}"
+    elif [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
+        # Non-interactive mode: default to basic
+        selected_profile="basic"
+        echo -e "${GREEN}✅ Non-interactive mode: using basic profile${NC}"
+    else
+        # display available profiles
+        echo ""
+        echo -e "${CYAN}Available profiles:${NC}"
+        echo "  🟢 basic    - Essential security"
+        echo "  🟡 standard - Balanced security"
+        echo "  🔴 advanced - Maximum security"
+        echo ""
+        
+        # prompt for profile selection
+        read -p "Choose profile (basic/standard/advanced): " selected_profile
+    fi
     
     # validate selection
     case "$selected_profile" in
         "basic"|"standard"|"advanced")
-            echo -e "${GREEN}✅ profil $selected_profile sélectionné${NC}"
-            log_action "info : profil $selected_profile sélectionné"
+            echo -e "${GREEN}✅ Profile selected: $selected_profile${NC}"
+            log_action "info: profile selected: $selected_profile"
             ;;
         *)
-            handle_error "profil invalide" "sélection du profil"
+            handle_error "invalid profile" "profile selection"
             ;;
     esac
     
@@ -234,12 +273,13 @@ select_profile() {
     mkdir -p /etc/firstboot
     echo "$selected_profile" > /etc/firstboot/profile
     
-    log_action "info : sélection du profil terminée"
+    log_action "info: profile selection completed"
 }
 
 # ⚙️ configure profile
 configure_profile() {
-    echo -e "${BLUE}⚙️ configuration du profil...${NC}"
+    echo ""
+    echo -e "${BLUE}⚙️ Configuring profile...${NC}"
     
     # read selected profile
     selected_profile=$(cat /etc/firstboot/profile)
@@ -251,18 +291,20 @@ configure_profile() {
     case "$selected_profile" in
         "basic")
             # basic profile configuration
-            echo -e "${BLUE}📦 configuration du profil basic...${NC}"
+            echo -e "${BLUE}📦 Profile: basic${NC}"
             # enable basic modules
             touch /etc/firstboot/modules/02-system_updates.enabled
             touch /etc/firstboot/modules/03-user_management.enabled
-            touch /etc/firstboot/modules/04-ssh_config.enabled
-            touch /etc/firstboot/modules/05-ssh_hardening.enabled
+            # Temporarily skip SSH modules for testing to preserve log access
+            # touch /etc/firstboot/modules/04-ssh_config.enabled
+            # touch /etc/firstboot/modules/05-ssh_hardening.enabled
             touch /etc/firstboot/modules/06-firewall_config.enabled
             touch /etc/firstboot/modules/11-monitoring.enabled
+            echo -e "${YELLOW}⚠️  SSH hardening modules skipped (testing mode)${NC}"
             ;;
         "standard")
             # standard profile configuration
-            echo -e "${BLUE}📦 configuration du profil standard...${NC}"
+            echo -e "${BLUE}📦 Profile: standard${NC}"
             # enable standard modules
             touch /etc/firstboot/modules/02-system_updates.enabled
             touch /etc/firstboot/modules/03-user_management.enabled
@@ -276,7 +318,7 @@ configure_profile() {
             ;;
         "advanced")
             # advanced profile configuration
-            echo -e "${BLUE}📦 configuration du profil advanced...${NC}"
+            echo -e "${BLUE}📦 Profile: advanced${NC}"
             # enable all modules
             touch /etc/firstboot/modules/02-system_updates.enabled
             touch /etc/firstboot/modules/03-user_management.enabled
@@ -291,84 +333,95 @@ configure_profile() {
             ;;
     esac
     
-    log_action "info : configuration du profil terminée"
+    log_action "info: profile configuration completed"
 }
 
 # ✅ validate profile
 validate_profile() {
-    echo -e "${BLUE}✅ validation du profil...${NC}"
+    echo ""
+    echo -e "${BLUE}✅ Validating profile...${NC}"
     
     # check if profile file exists
     if [ ! -f /etc/firstboot/profile ]; then
-        handle_error "fichier de profil non trouvé" "validation du profil"
+        handle_error "profile file not found" "profile validation"
     fi
     
     # check if modules directory exists
     if [ ! -d /etc/firstboot/modules ]; then
-        handle_error "répertoire des modules non trouvé" "validation du profil"
+        handle_error "modules directory not found" "profile validation"
     fi
     
     # check if at least one module is enabled
     if ! ls /etc/firstboot/modules/*.enabled > /dev/null 2>&1; then
-        handle_error "aucun module activé" "validation du profil"
+        handle_error "no modules enabled" "profile validation"
     fi
     
-    log_action "info : validation du profil terminée"
+    log_action "info: profile validation completed"
 }
 
 # 🎯 main function
 main() {
+    echo ""
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
+║ ${GREEN}🚀 Installing module ${CYAN}$MODULE_NAME${GREEN}
 ╚════════════════════════════════════════════════════════════${NC}"
+    echo ""
 
     # check dependencies
     check_dependencies
 
     # step 1: assess system
-    update_progress 1 4
-    echo -e "${BLUE}📦 étape 1 : évaluation du système...${NC}"
+    echo ""
+    update_progress 1 7
+    echo -e "${BLUE}📦 Step 1: Assessing system...${NC}"
     assess_system
-    log_action "info : étape 1 terminée"
+    log_action "info: step 1 completed"
 
     # step 2: select profile
-    update_progress 2 5
-    echo -e "${BLUE}📦 étape 2 : sélection du profil...${NC}"
+    echo ""
+    update_progress 2 7
+    echo -e "${BLUE}📦 Step 2: Selecting profile...${NC}"
     select_profile
-    log_action "info : étape 2 terminée"
+    log_action "info: step 2 completed"
     
     # step 3: configure SSH port
+    echo ""
     update_progress 3 7
-    echo -e "${BLUE}📦 étape 3 : configuration du port SSH...${NC}"
+    echo -e "${BLUE}📦 Step 3: Configuring SSH port...${NC}"
     configure_ssh_port
-    log_action "info : étape 3 terminée"
+    log_action "info: step 3 completed"
     
     # step 4: configure admin email
+    echo ""
     update_progress 4 7
-    echo -e "${BLUE}📦 étape 4 : configuration de l'email administrateur...${NC}"
+    echo -e "${BLUE}📦 Step 4: Configuring admin email...${NC}"
     configure_admin_email
-    log_action "info : étape 4 terminée"
+    log_action "info: step 4 completed"
     
     # step 5: configure SSH honeypot
+    echo ""
     update_progress 5 7
-    echo -e "${BLUE}📦 étape 5 : configuration du honeypot SSH...${NC}"
+    echo -e "${BLUE}📦 Step 5: Configuring SSH honeypot...${NC}"
     configure_ssh_honeypot
-    log_action "info : étape 5 terminée"
+    log_action "info: step 5 completed"
 
     # step 6: configure profile
+    echo ""
     update_progress 6 7
-    echo -e "${BLUE}📦 étape 6 : configuration du profil...${NC}"
+    echo -e "${BLUE}📦 Step 6: Configuring profile...${NC}"
     configure_profile
-    log_action "info : étape 6 terminée"
+    log_action "info: step 6 completed"
 
     # step 7: validate
+    echo ""
     update_progress 7 7
-    echo -e "${BLUE}📦 étape 7 : validation du profil...${NC}"
+    echo -e "${BLUE}📦 Step 7: Validating profile...${NC}"
     validate_profile
-    log_action "info : étape 7 terminée"
+    log_action "info: step 7 completed"
 
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+    echo ""
+    echo -e "${GREEN}🎉 Module $MODULE_NAME installed successfully${NC}"
+    log_action "success: module $MODULE_NAME installation completed"
 }
 
 # 🎯 run main function

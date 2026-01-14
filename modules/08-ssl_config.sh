@@ -28,72 +28,72 @@ handle_error() {
     error_message="$1"
     error_step="$2"
     echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    log_action "error: interrupted at step $error_step: $error_message"
     cleanup
     exit 1
 }
 
 # 🧹 cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 cleaning up...${NC}"
     # restore original config if needed
     if [ -f /etc/ssl/openssl.cnf.bak ]; then
         mv /etc/ssl/openssl.cnf.bak /etc/ssl/openssl.cnf
     fi
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
 # 🔄 check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 checking dependencies...${NC}"
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
+    echo -e "${GREEN}🟢 all dependencies satisfied${NC}"
+    log_action "info: dependency check passed"
 }
 
 # 📊 progress tracking
 update_progress() {
     current_step="$1"
     total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
+    echo -e "${BLUE}📊 progress: $current_step/$total_steps${NC}"
 }
 
 # 📦 install certbot
 install_certbot() {
-    echo -e "${BLUE}📦 installation de certbot...${NC}"
+    echo -e "${BLUE}📦 installing certbot...${NC}"
     
     # check if already installed
     if dpkg -s certbot >/dev/null 2>&1; then
-        log_action "info : certbot déjà installé"
-        echo -e "${GREEN}✅ certbot déjà installé${NC}"
+        log_action "info: certbot already installed"
+        echo -e "${GREEN}✅ certbot already installed${NC}"
         return 0
     fi
     
     # update package list
-    apt update || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
+    apt update || handle_error "failed to update package lists" "package update"
     
     # install certbot
-    apt install -y certbot python3-certbot-apache python3-certbot-nginx || handle_error "échec de l'installation de certbot" "installation"
+    apt install -y certbot python3-certbot-apache python3-certbot-nginx || handle_error "failed to install certbot" "package install"
     
-    log_action "info : certbot installé"
+    log_action "info: certbot installed"
 }
 
 # 🔒 configure ssl
 configure_ssl() {
-    echo -e "${BLUE}🔒 configuration ssl...${NC}"
+    echo -e "${BLUE}🔒 configuring SSL...${NC}"
     
     # backup original config
-    cp /etc/ssl/openssl.cnf /etc/ssl/openssl.cnf.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
+    cp /etc/ssl/openssl.cnf /etc/ssl/openssl.cnf.bak || handle_error "failed to back up OpenSSL config" "backup"
     
     # create dhparam (skip if exists)
     if [ ! -f /etc/ssl/certs/dhparam.pem ]; then
-        openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048 || handle_error "échec de la génération des paramètres dh" "génération des paramètres"
+        openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048 || handle_error "failed to generate DH parameters" "dhparam generation"
     else
-        log_action "info : dhparam déjà existant"
+        log_action "info: dhparam already exists"
     fi
     
     # configure openssl
@@ -131,14 +131,14 @@ IP.1 = 127.0.0.1
 EOF
     
     # set permissions
-    chmod 644 /etc/ssl/openssl.cnf || handle_error "échec de la définition des permissions" "définition des permissions"
+    chmod 644 /etc/ssl/openssl.cnf || handle_error "failed to set OpenSSL config permissions" "permissions"
     
-    log_action "info : configuration ssl effectuée"
+    log_action "info: SSL configuration applied"
 }
 
 # 🔄 configure services
 configure_services() {
-    echo -e "${BLUE}🔄 configuration des services (NIST SP 800-52)...${NC}"
+    echo -e "${BLUE}🔄 configuring services (NIST SP 800-52)...${NC}"
     
     # NIST SP 800-52 Rev 2: TLS 1.2+ with strong ciphers and PFS
     STRONG_CIPHERS="ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
@@ -238,12 +238,12 @@ EOF
 # 🎯 main function
 main() {
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
+║ 🚀 installing module $MODULE_NAME...                    
 ╚════════════════════════════════════════════════════════════${NC}"
-profile enablement
+    # profile enablement
     if [ ! -f "/etc/firstboot/modules/${MODULE_NAME}.enabled" ]; then
         log_action "info: module disabled for this profile; skipping"
-        echo -e "${YELLOW}⏭️  module non activé pour ce profil${NC}"
+        echo -e "${YELLOW}⏭️  module not enabled for this profile${NC}"
         exit 0
     fi
 
@@ -253,40 +253,40 @@ profile enablement
 
     # step 1: install certbot
     update_progress 1 4
-    echo -e "${BLUE}📦 étape 1 : installation...${NC}"
+    echo -e "${BLUE}📦 step 1: installation...${NC}"
     install_certbot
-    log_action "info : étape 1 terminée"
+    log_action "info: step 1 completed"
 
     # step 2: configure ssl
     update_progress 2 4
-    echo -e "${BLUE}📦 étape 2 : configuration ssl...${NC}"
+    echo -e "${BLUE}📦 step 2: SSL configuration...${NC}"
     configure_ssl
-    log_action "info : étape 2 terminée"
+    log_action "info: step 2 completed"
 
     # step 3: configure services
     update_progress 3 4
-    echo -e "${BLUE}📦 étape 3 : configuration des services...${NC}"
+    echo -e "${BLUE}📦 step 3: service configuration...${NC}"
     configure_services
-    log_action "info : étape 3 terminée"
+    log_action "info: step 3 completed"
 
     # step 4: verify
     update_progress 4 4
-    echo -e "${BLUE}📦 étape 4 : vérification...${NC}"
+    echo -e "${BLUE}📦 step 4: verification...${NC}"
     
     # verify dhparam
     if [ ! -f /etc/ssl/certs/dhparam.pem ]; then
-        handle_error "paramètres dh non générés" "vérification"
+        handle_error "DH parameters not generated" "verification"
     fi
     
     # verify openssl config
     if ! openssl ciphers -v | grep -q "TLSv1.2"; then
-        handle_error "configuration openssl invalide" "vérification"
+        handle_error "invalid OpenSSL cipher configuration" "verification"
     fi
     
-    log_action "info : étape 4 terminée"
+    log_action "info: step 4 completed"
 
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+    echo -e "${GREEN}🎉 module $MODULE_NAME installed successfully${NC}"
+    log_action "success: module $MODULE_NAME installation completed"
 }
 
 # 🎯 run main function

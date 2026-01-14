@@ -43,10 +43,10 @@ if ! declare -f log_action >/dev/null 2>&1; then
     log_action() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 fi
 if ! declare -f handle_error >/dev/null 2>&1; then
-    handle_error() { echo "🔴 erreur: ${2:-step} : ${1:-message}" >&2; }
+    handle_error() { echo "🔴 error: ${2:-step}: ${1:-message}" >&2; }
 fi
 if ! declare -f update_progress >/dev/null 2>&1; then
-    update_progress() { echo "📊 progression : ${1:-0}/${2:-0}"; }
+    update_progress() { echo "📊 progress: ${1:-0}/${2:-0}"; }
 fi
 
 # Parse command line arguments
@@ -131,35 +131,35 @@ echo -e "${BLUE}📦 Starting module installation...${NC}"
     MODULES_DIR="modules"
     [ ! -d "modules" ] && [ -f "01-profile_selection.sh" ] && MODULES_DIR="."
 
-    # charger les variables d'environnement (facultatif)
+    # load environment variables (optional)
     SAMPLE_ENV=""
     [ -f "${MODULES_DIR}/sample.env" ] && SAMPLE_ENV="${MODULES_DIR}/sample.env"
     if [ -n "$SAMPLE_ENV" ]; then
-        echo "📄 chargement des variables d'environnement..."
+        echo "📄 loading environment variables..."
         # shellcheck disable=SC1091
         source "$SAMPLE_ENV"
     else
-        echo "🟡 variables d'environnement facultatives non trouvées (sample.env) — poursuite avec les valeurs par défaut"
-        log_action "info : sample.env absent, valeurs par défaut utilisées"
+        echo "🟡 optional environment file not found (sample.env) — continuing with defaults"
+        log_action "info: sample.env missing; defaults used"
     fi
 
-    # installer le module de sélection de profil
-    echo "🚀 installation du module de sélection de profil..."
+    # install the profile selection module
+    echo "🚀 installing profile selection module..."
     source "${MODULES_DIR}/01-profile_selection.sh"
     # Load SSH port configuration if available
     if [ -f /etc/firstboot/ssh_port ]; then
         export SSH_PORT=$(cat /etc/firstboot/ssh_port)
-        log_action "info : SSH port loaded: ${SSH_PORT}"
+        log_action "info: SSH port loaded: ${SSH_PORT}"
     fi
-    # installer les modules activés dans l'ordre
+    # install enabled modules in order
     for module in ${MODULES_DIR}/[0-9][0-9]-*.sh; do
         [ -f "$module" ] || continue
         module_name=$(basename "$module" .sh)
         if [ -f "/etc/firstboot/modules/${module_name}.enabled" ]; then
-            echo "📦 installation du module : $module_name"
+            echo "📦 installing module: $module_name"
             source "$module"
         else
-            echo "⏭️ module $module_name non activé pour ce profil"
+            echo "⏭️ module $module_name not enabled for this profile"
         fi
     done
 
@@ -180,7 +180,7 @@ echo -e "${BLUE}✅ Finalizing installation...${NC}"
     echo -e "   ${BLUE}• Active services: $(systemctl list-units --type=service --state=active | wc -l)${NC}"
     echo -e "   ${BLUE}• Users created: $(grep -c "^[^:]*:[^:]*:[0-9]\{4\}" /etc/passwd)${NC}"
 
-    echo "🟢 installation terminée avec succès"
-    log_action "succès : installation terminée"
+    echo "🟢 installation completed successfully"
+    log_action "success: installation completed"
 
 exit 0

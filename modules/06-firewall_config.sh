@@ -118,7 +118,25 @@ configure_firewall() {
     
     # allow ssh (configurable port, default 22222)
     SSH_PORT=${SSH_PORT:-22222}
-    ufw allow ${SSH_PORT}/tcp comment 'Allow SSH' || handle_error "SSH port opening failed" "rule configuration"
+
+    # Optional: restrict SSH to a user allowlist created during VPS bootstrap
+    # One entry per line, e.g.:
+    #   203.0.113.45/32
+    #   2001:db8:85a3::8a2e:370:7334/128
+    SSH_ALLOWLIST_FILE="/etc/firstboot/ssh_allowlist"
+
+    if [ -s "$SSH_ALLOWLIST_FILE" ]; then
+        echo -e "${BLUE}🔐 Restricting SSH to allowlisted IPs...${NC}"
+        while IFS= read -r src; do
+            [ -n "$src" ] || continue
+            ufw allow from "$src" to any port "$SSH_PORT" proto tcp comment 'Allow SSH (allowlist)' \
+                || handle_error "SSH allowlist rule failed for: $src" "rule configuration"
+        done < "$SSH_ALLOWLIST_FILE"
+        log_action "info: SSH restricted via allowlist ($SSH_ALLOWLIST_FILE)"
+    else
+        ufw allow ${SSH_PORT}/tcp comment 'Allow SSH' || handle_error "SSH port opening failed" "rule configuration"
+        log_action "warning: SSH open to the internet (no allowlist at $SSH_ALLOWLIST_FILE)"
+    fi
     
     # allow http/https
     ufw allow 80/tcp comment 'Allow HTTP' || handle_error "HTTP port opening failed" "rule configuration"

@@ -28,72 +28,72 @@ handle_error() {
     error_message="$1"
     error_step="$2"
     echo -e "${RED}🔴 Error detected at step $error_step: $error_message${NC}"
-    log_action "erreur : interruption à l'étape $error_step : $error_message"
+    log_action "error: interrupted at step $error_step: $error_message"
     cleanup
     exit 1
 }
 
 # 🧹 cleanup function
 cleanup() {
-    echo -e "${YELLOW}🧹 nettoyage en cours...${NC}"
+    echo -e "${YELLOW}🧹 cleaning up...${NC}"
     # restore original config if needed
     if [ -f /etc/postfix/main.cf.bak ]; then
         mv /etc/postfix/main.cf.bak /etc/postfix/main.cf
-        log_action "info : configuration postfix restaurée"
+        log_action "info: Postfix configuration restored"
     fi
     if [ -f /etc/dovecot/dovecot.conf.bak ]; then
         mv /etc/dovecot/dovecot.conf.bak /etc/dovecot/dovecot.conf
-        log_action "info : configuration dovecot restaurée"
+        log_action "info: Dovecot configuration restored"
     fi
     # leave services running; only restore configs
-    log_action "info : nettoyage effectué"
+    log_action "info: cleanup completed"
 }
 
 # 🔄 check dependencies
 check_dependencies() {
-    echo -e "${BLUE}🔍 vérification des dépendances...${NC}"
+    echo -e "${BLUE}🔍 checking dependencies...${NC}"
     for dep in "${MODULE_DEPENDENCIES[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            handle_error "dépendance manquante : $dep" "vérification des dépendances"
+            handle_error "missing dependency: $dep" "dependency check"
         fi
     done
-    echo -e "${GREEN}🟢 toutes les dépendances sont satisfaites${NC}"
-    log_action "info : vérification des dépendances réussie"
+    echo -e "${GREEN}🟢 all dependencies satisfied${NC}"
+    log_action "info: dependency check passed"
 }
 
 # 📊 progress tracking
 update_progress() {
     current_step="$1"
     total_steps="$2"
-    echo -e "${BLUE}📊 progression : $current_step/$total_steps${NC}"
+    echo -e "${BLUE}📊 progress: $current_step/$total_steps${NC}"
 }
 
 # 📦 install mail server
 install_mail_server() {
-    echo -e "${BLUE}📦 installation du serveur mail...${NC}"
+    echo -e "${BLUE}📦 installing mail server...${NC}"
     
     # check if already installed
     if dpkg -s postfix >/dev/null 2>&1 && dpkg -s dovecot-imapd >/dev/null 2>&1; then
-        log_action "info : serveur mail déjà installé"
-        echo -e "${GREEN}✅ serveur mail déjà installé${NC}"
+        log_action "info: mail server already installed"
+        echo -e "${GREEN}✅ mail server already installed${NC}"
         return 0
     fi
     
     # update package list
-    apt update || handle_error "échec de la mise à jour des paquets" "mise à jour des paquets"
+    apt update || handle_error "failed to update package lists" "package update"
     
     # install postfix and dovecot
-    apt install -y postfix dovecot-imapd dovecot-pop3d || handle_error "échec de l'installation des paquets" "installation"
+    apt install -y postfix dovecot-imapd dovecot-pop3d || handle_error "failed to install packages" "package install"
     
-    log_action "info : serveur mail installé"
+    log_action "info: mail server installed"
 }
 
 # 🔒 configure postfix
 configure_postfix() {
-    echo -e "${BLUE}🔒 configuration de postfix...${NC}"
+    echo -e "${BLUE}🔒 configuring Postfix...${NC}"
     
     # backup original config
-    cp /etc/postfix/main.cf /etc/postfix/main.cf.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
+    cp /etc/postfix/main.cf /etc/postfix/main.cf.bak || handle_error "failed to back up Postfix configuration" "backup"
     
     # configure main.cf
     cat > /etc/postfix/main.cf << EOF
@@ -155,17 +155,17 @@ virtual_alias_maps = hash:/etc/postfix/valiases
 EOF
     
     # set permissions
-    chmod 644 /etc/postfix/main.cf || handle_error "échec de la définition des permissions" "définition des permissions"
+    chmod 644 /etc/postfix/main.cf || handle_error "failed to set Postfix config permissions" "permissions"
     
-    log_action "info : configuration de postfix effectuée"
+    log_action "info: Postfix configuration applied"
 }
 
 # 🔒 configure dovecot
 configure_dovecot() {
-    echo -e "${BLUE}🔒 configuration de dovecot...${NC}"
+    echo -e "${BLUE}🔒 configuring Dovecot...${NC}"
     
     # backup original config
-    cp /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.bak || handle_error "échec de la sauvegarde de la configuration" "sauvegarde de la configuration"
+    cp /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.bak || handle_error "failed to back up Dovecot configuration" "backup"
     
     # configure dovecot.conf
     cat > /etc/dovecot/dovecot.conf << EOF
@@ -203,41 +203,41 @@ ssl_cipher_list = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDH
 EOF
     
     # set permissions
-    chmod 644 /etc/dovecot/dovecot.conf || handle_error "échec de la définition des permissions" "définition des permissions"
+    chmod 644 /etc/dovecot/dovecot.conf || handle_error "failed to set Dovecot config permissions" "permissions"
     
-    log_action "info : configuration de dovecot effectuée"
+    log_action "info: Dovecot configuration applied"
 }
 
 # 🔄 restart services
 restart_services() {
-    echo -e "${BLUE}🔄 redémarrage des services...${NC}"
+    echo -e "${BLUE}🔄 restarting services...${NC}"
     
     # restart postfix
-    systemctl restart postfix || handle_error "échec du redémarrage de postfix" "redémarrage de postfix"
+    systemctl restart postfix || handle_error "failed to restart Postfix" "Postfix restart"
     
     # restart dovecot
-    systemctl restart dovecot || handle_error "échec du redémarrage de dovecot" "redémarrage de dovecot"
+    systemctl restart dovecot || handle_error "failed to restart Dovecot" "Dovecot restart"
     
     # verify services
     if ! systemctl is-active --quiet postfix; then
-        handle_error "service postfix non actif" "vérification des services"
+        handle_error "Postfix service is not active" "service verification"
     fi
     if ! systemctl is-active --quiet dovecot; then
-        handle_error "service dovecot non actif" "vérification des services"
+        handle_error "Dovecot service is not active" "service verification"
     fi
     
-    log_action "info : services redémarrés"
+    log_action "info: services restarted"
 }
 
 # 🎯 main function
 main() {
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installation du module $MODULE_NAME...                    
+║ 🚀 installing module $MODULE_NAME...                    
 ╚════════════════════════════════════════════════════════════${NC}"
-profile enablement
+    # profile enablement
     if [ ! -f "/etc/firstboot/modules/${MODULE_NAME}.enabled" ]; then
         log_action "info: module disabled for this profile; skipping"
-        echo -e "${YELLOW}⏭️  module non activé pour ce profil${NC}"
+        echo -e "${YELLOW}⏭️  module not enabled for this profile${NC}"
         exit 0
     fi
 
@@ -247,55 +247,55 @@ profile enablement
 
     # step 1: install mail server
     update_progress 1 5
-    echo -e "${BLUE}📦 étape 1 : installation...${NC}"
+    echo -e "${BLUE}📦 step 1: installation...${NC}"
     install_mail_server
-    log_action "info : étape 1 terminée"
+    log_action "info: step 1 completed"
 
     # step 2: configure postfix
     update_progress 2 5
-    echo -e "${BLUE}📦 étape 2 : configuration de postfix...${NC}"
+    echo -e "${BLUE}📦 step 2: Postfix configuration...${NC}"
     configure_postfix
-    log_action "info : étape 2 terminée"
+    log_action "info: step 2 completed"
 
     # step 3: configure dovecot
     update_progress 3 5
-    echo -e "${BLUE}📦 étape 3 : configuration de dovecot...${NC}"
+    echo -e "${BLUE}📦 step 3: Dovecot configuration...${NC}"
     configure_dovecot
-    log_action "info : étape 3 terminée"
+    log_action "info: step 3 completed"
 
     # step 4: restart services
     update_progress 4 5
-    echo -e "${BLUE}📦 étape 4 : redémarrage des services...${NC}"
+    echo -e "${BLUE}📦 step 4: restarting services...${NC}"
     restart_services
-    log_action "info : étape 4 terminée"
+    log_action "info: step 4 completed"
 
     # step 5: verify
     update_progress 5 5
-    echo -e "${BLUE}📦 étape 5 : vérification...${NC}"
+    echo -e "${BLUE}📦 step 5: verification...${NC}"
     
     # verify services
     if ! systemctl is-active --quiet postfix; then
-        handle_error "service postfix non actif" "vérification"
+        handle_error "Postfix service is not active" "verification"
     fi
     if ! systemctl is-active --quiet dovecot; then
-        handle_error "service dovecot non actif" "vérification"
+        handle_error "Dovecot service is not active" "verification"
     fi
     
     # verify ports
     if ! netstat -tuln | grep -q ":25"; then
-        handle_error "port smtp non ouvert" "vérification"
+        handle_error "SMTP port (25) is not open" "verification"
     fi
     if ! netstat -tuln | grep -q ":143"; then
-        handle_error "port imap non ouvert" "vérification"
+        handle_error "IMAP port (143) is not open" "verification"
     fi
     if ! netstat -tuln | grep -q ":110"; then
-        handle_error "port pop3 non ouvert" "vérification"
+        handle_error "POP3 port (110) is not open" "verification"
     fi
     
-    log_action "info : étape 5 terminée"
+    log_action "info: step 5 completed"
 
-    echo -e "${GREEN}🎉 module $MODULE_NAME installé avec succès${NC}"
-    log_action "succès : installation du module $MODULE_NAME terminée"
+    echo -e "${GREEN}🎉 module $MODULE_NAME installed successfully${NC}"
+    log_action "success: module $MODULE_NAME installation completed"
 }
 
 # 🎯 run main function

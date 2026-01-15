@@ -131,8 +131,8 @@ All standard, plus:
 
 ### Test your new login
 ```bash
-# SSH on the new port (22222)
-ssh -p 22222 admin@your-server-ip
+# SSH on the new port (22022)
+ssh -p 22022 admin@your-server-ip
 ```
 
 ### Check the firewall

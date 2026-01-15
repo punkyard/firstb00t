@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# 🔑 Debian setup (runs on VPS)
-# Purpose: inject SSH public key + capture IPv4/IPv6 allowlist BEFORE running the full installer.
+# 🔧 Debian setup & installation (runs on VPS)
+# Purpose: complete Debian hardening workflow
+# A. inject SSH key + capture allowlist
+# B. run profile selection + all modules
 
 set -Eeuo pipefail
 export LC_ALL=C.UTF-8
@@ -17,32 +19,42 @@ NC='\033[0m'
 MODULE_NAME="debian_setup"
 
 NON_INTERACTIVE="false"
-NO_CHAIN="false"
-CHAIN_ARGS=("--interactive")
+NO_MODULES="false"
+PROFILE="basic"
 
-# Parse flags for setup script. Any args after "--" are passed to debian-firstb00t.sh.
+# Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --non-interactive)
             NON_INTERACTIVE="true"
             shift
             ;;
-        --no-chain)
-            NO_CHAIN="true"
+        --interactive)
+            NON_INTERACTIVE="false"
             shift
             ;;
-        --)
+        --profile)
+            PROFILE="$2"
+            shift 2
+            ;;
+        --no-modules)
+            NO_MODULES="true"
             shift
-            CHAIN_ARGS=("$@")
-            break
+            ;;
+        -h|--help)
+            echo -e "${BLUE}Usage: $0 [--profile basic|standard|advanced] [--non-interactive|--interactive] [--no-modules]${NC}"
+            exit 0
             ;;
         *)
-            # Unknown arg for setup; treat as chain arg for backward compatibility
-            CHAIN_ARGS=("$@")
-            break
+            echo -e "${RED}Unknown option: ${1}${NC}"
+            exit 1
             ;;
     esac
 done
+
+# Export for modules to use
+export FIRSTBOOT_PROFILE="${PROFILE}"
+export FIRSTBOOT_NON_INTERACTIVE="${NON_INTERACTIVE}"
 
 # =======================================================================
 # Logging
@@ -61,6 +73,10 @@ handle_error() {
     exit 1
 }
 
+update_progress() {
+    echo "📊 progress: ${1:-0}/${2:-0}"
+}
+
 # =======================================================================
 # Main
 # =======================================================================
@@ -69,7 +85,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║ 🔧 Debian setup (SSH key + allowlist)                      ║${NC}"
+echo -e "${CYAN}║ 🔧 Debian setup (SSH key + allowlist + modules)            ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -78,13 +94,13 @@ mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
 # =======================================================================
-# Step 1: prompt for SSH public key
+# PART A: SSH key injection
 # =======================================================================
 
-echo -e "${BLUE}📋 Step 1: SSH public key${NC}"
+echo -e "${BLUE}📋 Part A: SSH public key${NC}"
 echo ""
 echo -e "${YELLOW}Paste your SSH public key from your LOCAL machine.${NC}"
-echo -e "${YELLOW}Tip (local machine): run: bash github/firstb00t.sh${NC}"
+echo -e "${YELLOW}Tip (local machine): run: bash firstb00t.sh${NC}"
 echo -e "${YELLOW}It looks like: ssh-ed25519 AAAAC3... [user@host]${NC}"
 echo ""
 
@@ -126,10 +142,10 @@ else
 fi
 
 # =======================================================================
-# Step 2: prompt for user public IPs (allowlist)
+# PART B: IP allowlist
 # =======================================================================
 
-echo -e "${BLUE}📍 Step 2: Your public IP(s) (SSH firewall allowlist)${NC}"
+echo -e "${BLUE}📍 Part B: Your public IP(s) (SSH firewall allowlist)${NC}"
 echo ""
 echo -e "${YELLOW}💡 Beginner explanation:${NC}"
 echo -e "${YELLOW}A firewall is a security gate.${NC}"
@@ -204,10 +220,10 @@ fi
 echo ""
 
 # =======================================================================
-# Step 3: verify SSH access (user action)
+# PART C: Verify SSH access
 # =======================================================================
 
-echo -e "${BLUE}🧪 Step 3: Verify your SSH access (from your LOCAL machine)${NC}"
+echo -e "${BLUE}🧪 Part C: Verify your SSH access (from your LOCAL machine)${NC}"
 echo ""
 echo -e "${GREEN}✅ Your SSH key is now stored on this VPS in:${NC}"
 echo -e "${GREEN}   /root/.ssh/authorized_keys${NC}"
@@ -226,31 +242,107 @@ log_action "info: user instructed to test SSH key access from local machine"
 echo ""
 
 # =======================================================================
-# Step 4: continue with full installation (on VPS)
+# PART D: Module installation
 # =======================================================================
 
-echo -e "${BLUE}🚀 Step 4: Full installation (runs on this VPS)${NC}"
-echo ""
-
-if [[ "${NO_CHAIN}" == "true" ]]; then
-    echo -e "${YELLOW}ℹ️  --no-chain set: not starting debian-firstb00t.sh${NC}"
-    log_action "info: --no-chain set; stopping after setup"
+if [[ "${NO_MODULES}" == "true" ]]; then
+    echo -e "${YELLOW}ℹ️  --no-modules set: stopping after SSH setup${NC}"
+    log_action "info: --no-modules set; stopping before module installation"
     exit 0
 fi
 
-if [ -f "${SCRIPT_DIR}/debian-firstb00t.sh" ]; then
-    echo -e "${GREEN}✅ Starting main installer: debian-firstb00t.sh${NC}"
-    echo -e "${YELLOW}(This will now ask profile questions and run modules)${NC}"
-    echo ""
-    log_action "info: chaining into ${SCRIPT_DIR}/debian-firstb00t.sh"
-    bash "${SCRIPT_DIR}/debian-firstb00t.sh" "${CHAIN_ARGS[@]}"
+cat <<EOF
+${CYAN}
+
+  .d888 d8b                  888    888       .d8888b.   .d8888b.  888    
+d88P"  Y8P                  888    888      d88P  Y88b d88P  Y88b 888    
+888                         888    888      888    888 888    888 888    
+888888 888 888d888 .d8888b  888888 88888b.  888    888 888    888 888888 
+888    888 888P"   88K      888    888 "88b 888    888 888    888 888    
+888    888 888     "Y8888b. 888    888  888 888    888 888    888 888    
+888    888 888          X88 Y88b.  888 d88P Y88b  d88P Y88b  d88P Y88b.  
+888    888 888      88888P'  "Y888 88888P"   "Y8888P"   "Y8888P"   "Y888
+
+${NC}
+
+${GREEN}🚀 Debian First-Boot Automation Script
+
+This script performs standard initialization tasks when first booting
+a freshly installed Linux Debian server (version 9, 10, 11, 12, 13)
+(on VPS, home-server, virtual machine, or any other environment)
+and sets up services to enhance server security.
+
+${YELLOW}⚠️  Prerequisites:
+${CYAN}• Registrar DNS already configured to point to this server IP
+• SPF, DKIM, and DMARC entries already configured${NC}
+
+${BLUE}📋 This script installs only open-source software
+recognized by the Debian Linux community from official repositories
+and recommends the creation of strong passwords.${NC}
+
+${GREEN}⏱️  Estimated time: 30 minutes${NC}
+EOF
+
+echo -e "${BLUE}📦 Part D: Starting module installation...${NC}"
+
+# Detect module location (modules/ subdir or flat)
+MODULES_DIR="../modules"
+[ ! -d "$MODULES_DIR" ] && [ -f "../01-profile_selection.sh" ] && MODULES_DIR=".."
+[ ! -d "$MODULES_DIR" ] && [ -d "modules" ] && MODULES_DIR="modules"
+
+# Load environment variables (optional)
+SAMPLE_ENV=""
+[ -f "${MODULES_DIR}/sample.env" ] && SAMPLE_ENV="${MODULES_DIR}/sample.env"
+if [ -n "$SAMPLE_ENV" ]; then
+    echo "📄 loading environment variables..."
+    # shellcheck disable=SC1091
+    source "$SAMPLE_ENV"
 else
-    echo -e "${RED}🔴 Cannot continue: ${SCRIPT_DIR}/debian-firstb00t.sh not found.${NC}"
-    echo -e "${YELLOW}You likely uploaded only this setup script.${NC}"
-    echo ""
-    echo -e "${YELLOW}From your local machine, upload the full project files to /root/firstb00t/:${NC}"
-    echo -e "${YELLOW}  scp -r github/* root@<VPS_IP>:/root/firstb00t/${NC}"
-    echo ""
-    log_action "error: debian-firstb00t.sh missing; cannot proceed to full install"
-    exit 1
+    echo "🟡 optional environment file not found (sample.env) — continuing with defaults"
+    log_action "info: sample.env missing; defaults used"
 fi
+
+# Install the profile selection module
+echo "🚀 installing profile selection module..."
+source "${MODULES_DIR}/01-profile_selection.sh"
+
+# Load SSH port configuration if available
+if [ -f /etc/firstboot/ssh_port ]; then
+    export SSH_PORT=$(cat /etc/firstboot/ssh_port)
+    log_action "info: SSH port loaded: ${SSH_PORT}"
+fi
+
+# Install enabled modules in order
+for module in ${MODULES_DIR}/[0-9][0-9]-*.sh; do
+    [ -f "$module" ] || continue
+    module_name=$(basename "$module" .sh)
+    if [ -f "/etc/firstboot/modules/${module_name}.enabled" ]; then
+        echo "📦 installing module: $module_name"
+        source "$module"
+    else
+        echo "⏭️ module $module_name not enabled for this profile"
+    fi
+done
+
+echo -e "${GREEN}✅ Module installation completed${NC}"
+log_action "success: module installation completed"
+
+# =======================================================================
+# PART E: Finalization
+# =======================================================================
+
+echo -e "${BLUE}✅ Part E: Finalizing installation...${NC}"
+
+echo -e "${YELLOW}🧹 Cleaning up temporary files...${NC}"
+rm -f /tmp/script_temp_*
+
+echo -e "${CYAN}📋 Generating final report...${NC}"
+echo -e "   ${BLUE}• Selected profile: $(cat /etc/firstboot/profile)${NC}"
+echo -e "   ${BLUE}• Modules installed: $(ls /etc/firstboot/modules/*.enabled | wc -l)${NC}"
+echo -e "   ${BLUE}• Active services: $(systemctl list-units --type=service --state=active | wc -l)${NC}"
+echo -e "   ${BLUE}• Users created: $(grep -c "^[^:]*:[^:]*:[0-9]\{4\}" /etc/passwd)${NC}"
+
+echo "🟢 installation completed successfully"
+log_action "success: installation completed"
+
+exit 0

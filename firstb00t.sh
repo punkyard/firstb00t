@@ -33,35 +33,67 @@ chmod 700 "$SSH_DIR"
 
 SSH_KEY_ED25519="${SSH_DIR}/id_ed25519"
 SSH_KEY_RSA="${SSH_DIR}/id_rsa"
+SSH_KEY_FIRSTB00T="${SSH_DIR}/firstb00t_vps"
 
-if [ -f "${SSH_KEY_ED25519}.pub" ]; then
-    SSH_KEY="$SSH_KEY_ED25519"
-    echo -e "${GREEN}✅ SSH key found: ${SSH_KEY}.pub${NC}"
-elif [ -f "${SSH_KEY_RSA}.pub" ]; then
-    SSH_KEY="$SSH_KEY_RSA"
-    echo -e "${GREEN}✅ SSH key found: ${SSH_KEY}.pub${NC}"
-else
-    echo -e "${YELLOW}⚠️  No SSH key found in ~/.ssh${NC}"
+if [ -f "${SSH_KEY_ED25519}.pub" ] || [ -f "${SSH_KEY_RSA}.pub" ] || [ -f "${SSH_KEY_FIRSTB00T}.pub" ]; then
+    echo -e "${YELLOW}📋 Found existing SSH key(s):${NC}"
+    [ -f "${SSH_KEY_ED25519}.pub" ] && echo -e "  • ${SSH_KEY_ED25519}"
+    [ -f "${SSH_KEY_RSA}.pub" ] && echo -e "  • ${SSH_KEY_RSA}"
+    [ -f "${SSH_KEY_FIRSTB00T}.pub" ] && echo -e "  • ${SSH_KEY_FIRSTB00T}"
     echo ""
-    echo -e "${YELLOW}We recommend an ED25519 key (modern, small, fast).${NC}"
+    echo -e "${BLUE}🔑 SSH key options:${NC}"
+    echo -e "  ${CYAN}A)${NC} Use existing key (recommended if you already use SSH)"
+    echo -e "  ${CYAN}B)${NC} Create dedicated key for this VPS: ${SSH_KEY_FIRSTB00T}"
     echo ""
-    read -r -p "Generate a new ED25519 key now? (y/n): " gen_key
+    read -r -p "Your choice (A/B): " key_choice
     echo ""
 
-    if [[ "$gen_key" =~ ^[Yy]$ ]]; then
-        SSH_KEY="$SSH_KEY_ED25519"
-
-        echo -e "${BLUE}🔐 Generating ED25519 key...${NC}"
+    if [[ "$key_choice" =~ ^[Bb]$ ]]; then
+        SSH_KEY="$SSH_KEY_FIRSTB00T"
+        echo -e "${BLUE}🔐 Generating dedicated ED25519 key for firstb00t VPS...${NC}"
         echo -e "${YELLOW}Tip: you can set a passphrase for better security.${NC}"
         echo -e "${YELLOW}(If you leave it empty, you won't be prompted later.)${NC}"
         echo ""
 
-        ssh-keygen -t ed25519 -f "$SSH_KEY" -C "firstb00t-$(date +%Y%m%d)" || {
+        ssh-keygen -t ed25519 -f "$SSH_KEY" -C "firstb00t-vps-$(date +%Y%m%d)" || {
             echo -e "${RED}❌ Key generation failed${NC}"
             exit 1
         }
         echo ""
-        echo -e "${GREEN}✅ Key generated: ${SSH_KEY}.pub${NC}"
+        echo -e "${GREEN}✅ Dedicated key generated: ${SSH_KEY}.pub${NC}"
+    else
+        # Use existing key (default to ED25519 > RSA)
+        if [ -f "${SSH_KEY_ED25519}.pub" ]; then
+            SSH_KEY="$SSH_KEY_ED25519"
+        elif [ -f "${SSH_KEY_RSA}.pub" ]; then
+            SSH_KEY="$SSH_KEY_RSA"
+        elif [ -f "${SSH_KEY_FIRSTB00T}.pub" ]; then
+            SSH_KEY="$SSH_KEY_FIRSTB00T"
+        fi
+        echo -e "${GREEN}✅ Using existing key: ${SSH_KEY}.pub${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  No SSH key found in ~/.ssh${NC}"
+    echo ""
+    echo -e "${YELLOW}We recommend creating a dedicated ED25519 key for this VPS.${NC}"
+    echo ""
+    read -r -p "Generate a new dedicated key ${SSH_KEY_FIRSTB00T}? (y/n): " gen_key
+    echo ""
+
+    if [[ "$gen_key" =~ ^[Yy]$ ]]; then
+        SSH_KEY="$SSH_KEY_FIRSTB00T"
+
+        echo -e "${BLUE}🔐 Generating dedicated ED25519 key for firstb00t VPS...${NC}"
+        echo -e "${YELLOW}Tip: you can set a passphrase for better security.${NC}"
+        echo -e "${YELLOW}(If you leave it empty, you won't be prompted later.)${NC}"
+        echo ""
+
+        ssh-keygen -t ed25519 -f "$SSH_KEY" -C "firstb00t-vps-$(date +%Y%m%d)" || {
+            echo -e "${RED}❌ Key generation failed${NC}"
+            exit 1
+        }
+        echo ""
+        echo -e "${GREEN}✅ Dedicated key generated: ${SSH_KEY}.pub${NC}"
     else
         echo -e "${RED}❌ Cannot proceed without an SSH key${NC}"
         exit 1
@@ -248,10 +280,10 @@ echo ""
 echo -e "${GREEN}4. Run Debian setup on the VPS:${NC}"
 echo -e "${BLUE}   # On the VPS terminal:${NC}"
 echo -e "${BLUE}   cd /root/firstb00t${NC}"
-echo -e "${BLUE}   bash debian-setup.sh${NC}"
+echo -e "${BLUE}   bash setup/debian.sh${NC}"
 echo ""
 
-echo -e "${GREEN}5. When prompted by debian-setup.sh, copy-paste:${NC}"
+echo -e "${GREEN}5. When prompted by setup/debian.sh, copy-paste:${NC}"
 echo -e "${YELLOW}   • SSH public key (from above)${NC}"
 echo -e "${YELLOW}   • your public IPv4 and/or IPv6 (from above)${NC}"
 echo ""

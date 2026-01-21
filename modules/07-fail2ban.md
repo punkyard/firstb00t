@@ -1,4 +1,4 @@
-# 🛡️ Fail2ban Module (6-fail2ban)
+# 🛡️ Fail2ban Module (07-fail2ban)
 
 ## Purpose
 
@@ -21,6 +21,7 @@ A. **SSH Protection** (always enabled)
    - Ban trigger: 5 failed attempts within 10 minutes
    - Ban duration: 10 minutes initial, escalating on repeat offenders
    - Whitelist: localhost (127.0.0.1), loopback
+   - Integration: reads `/etc/firstboot/ssh_allowlist` (if present) and sets `ignoreip` accordingly; uses `$SSH_PORT` for jail port configuration
 
 B. **HTTP/HTTPS Protection** (Standard+ profiles)
    - Monitors: `/var/log/apache2/error.log` (if Apache present)
@@ -145,7 +146,7 @@ sudo fail2ban-client reset all
 ### Log Files
 
 - `/var/log/fail2ban.log` — Fail2ban actions and jail status
-- `/var/log/firstboot/6-fail2ban.log` — Module installation and configuration
+- `/var/log/firstboot/07-fail2ban.log` — Module installation and configuration
 - `/var/log/auth.log` — SSH login attempts (monitored by fail2ban)
 
 ### Log Levels
@@ -181,7 +182,7 @@ sudo fail2ban-client reset all
 ---
 
 **Module Type:** Security — Intrusion prevention  
-**Execution Order:** Sixth (6)  
+**Execution Order:** Seventh (7)  
 **Profile Availability:** Standard, Advanced  
 **Configuration:** Automatic with profile-specific rules  
 **Service Integration:** SSH, HTTP/HTTPS, iptables, UFW

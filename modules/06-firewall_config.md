@@ -62,7 +62,7 @@ C. **Advanced Profile Rules**
 ### SSH Port Integration
 
 - Reads `$SSH_PORT` environment variable (set by 0-profile_selection module)
-- Defaults to port 22222 if variable not set
+- Defaults to port 22022 if variable not set
 - Creates UFW rules for custom port (e.g., ufw allow 22022/tcp)
 
 ## 🚨 Error Handling

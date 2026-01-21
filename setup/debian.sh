@@ -20,6 +20,7 @@ MODULE_NAME="debian_setup"
 
 NON_INTERACTIVE="false"
 NO_MODULES="false"
+SKIP_SSH_HARDENING="false"
 PROFILE="basic"
 
 # Parse command-line arguments
@@ -41,8 +42,12 @@ while [[ $# -gt 0 ]]; do
             NO_MODULES="true"
             shift
             ;;
+        --skip-ssh-hardening)
+            SKIP_SSH_HARDENING="true"
+            shift
+            ;;
         -h|--help)
-            echo -e "${BLUE}Usage: $0 [--profile basic|standard|advanced] [--non-interactive|--interactive] [--no-modules]${NC}"
+            echo -e "${BLUE}Usage: $0 [--profile basic|standard|advanced] [--non-interactive|--interactive] [--no-modules] [--skip-ssh-hardening]${NC}"
             exit 0
             ;;
         *)
@@ -84,9 +89,8 @@ update_progress() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
-echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║ 🔧 Debian setup (SSH key + allowlist + modules)            ║${NC}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+print_title_frame "🔧" "Debian setup (SSH key + allowlist + modules)"
 echo ""
 
 # Create .ssh directory
@@ -170,8 +174,8 @@ else
     read -r -p "Your public IPv6 (press Enter to skip): " user_public_ipv6
 fi
 
-mkdir -p /etc/firstboot
-ALLOWLIST_FILE="/etc/firstboot/ssh_allowlist"
+mkdir -p /home/firstb00t
+ALLOWLIST_FILE="/home/firstb00t/ssh_allowlist"
 
 # Start fresh each run (idempotent)
 : > "$ALLOWLIST_FILE" || true
@@ -242,7 +246,32 @@ log_action "info: user instructed to test SSH key access from local machine"
 echo ""
 
 # =======================================================================
-# PART D: Module installation
+# PART D: System preparation
+# =======================================================================
+
+echo -e "${BLUE}🔄 Part D: Preparing system...${NC}"
+
+echo -e "${YELLOW}📦 Updating package lists...${NC}"
+apt update
+log_action "info: apt update completed"
+
+echo -e "${YELLOW}👤 Creating sudo user...${NC}"
+# Create sudo user if not exists
+if ! id "sudo" &>/dev/null; then
+    useradd -m -s /bin/bash sudo
+    echo "sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sudo
+    chmod 440 /etc/sudoers.d/sudo
+    echo -e "${GREEN}✅ Sudo user created${NC}"
+    log_action "info: sudo user created"
+else
+    echo -e "${GREEN}✅ Sudo user already exists${NC}"
+    log_action "info: sudo user already exists"
+fi
+
+echo ""
+
+# =======================================================================
+# PART E: Module installation
 # =======================================================================
 
 if [[ "${NO_MODULES}" == "true" ]]; then
@@ -306,9 +335,16 @@ fi
 echo "🚀 installing profile selection module..."
 source "${MODULES_DIR}/01-profile_selection.sh"
 
+if [[ "${SKIP_SSH_HARDENING}" == "true" ]]; then
+    # 🟡 Path A debugging helper: avoid SSH lockout when password auth is still needed to collect logs
+    rm -f "/home/firstb00t/modules/05-ssh_hardening.enabled" || true
+    echo -e "${YELLOW}⚠️  --skip-ssh-hardening set: skipping 05-ssh_hardening for this run${NC}"
+    log_action "info: --skip-ssh-hardening set; removed 05-ssh_hardening.enabled marker"
+fi
+
 # Load SSH port configuration if available
-if [ -f /etc/firstboot/ssh_port ]; then
-    export SSH_PORT=$(cat /etc/firstboot/ssh_port)
+if [ -f /home/firstb00t/ssh_port ]; then
+    export SSH_PORT=$(cat /home/firstb00t/ssh_port)
     log_action "info: SSH port loaded: ${SSH_PORT}"
 fi
 
@@ -316,11 +352,26 @@ fi
 for module in ${MODULES_DIR}/[0-9][0-9]-*.sh; do
     [ -f "$module" ] || continue
     module_name=$(basename "$module" .sh)
-    if [ -f "/etc/firstboot/modules/${module_name}.enabled" ]; then
-        echo "📦 installing module: $module_name"
-        source "$module"
+    
+    # Check if step by step mode
+    if [ "$(cat /home/firstb00t/profile)" = "step by step" ]; then
+        echo ""
+        echo -e "${YELLOW}📦 Module: $module_name${NC}"
+        read -p "Install this module? (y/N): " install_module
+        if [[ "$install_module" =~ ^[Yy]$ ]]; then
+            touch "/home/firstb00t/modules/${module_name}.enabled"
+            echo "📦 installing module: $module_name"
+            source "$module"
+        else
+            echo "⏭️ skipping module: $module_name"
+        fi
     else
-        echo "⏭️ module $module_name not enabled for this profile"
+        if [ -f "/home/firstb00t/modules/${module_name}.enabled" ]; then
+            echo "📦 installing module: $module_name"
+            source "$module"
+        else
+            echo "⏭️ module $module_name not enabled for this profile"
+        fi
     fi
 done
 
@@ -328,17 +379,17 @@ echo -e "${GREEN}✅ Module installation completed${NC}"
 log_action "success: module installation completed"
 
 # =======================================================================
-# PART E: Finalization
+# PART F: Finalization
 # =======================================================================
 
-echo -e "${BLUE}✅ Part E: Finalizing installation...${NC}"
+echo -e "${BLUE}✅ Part F: Finalizing installation...${NC}"
 
 echo -e "${YELLOW}🧹 Cleaning up temporary files...${NC}"
 rm -f /tmp/script_temp_*
 
 echo -e "${CYAN}📋 Generating final report...${NC}"
-echo -e "   ${BLUE}• Selected profile: $(cat /etc/firstboot/profile)${NC}"
-echo -e "   ${BLUE}• Modules installed: $(ls /etc/firstboot/modules/*.enabled | wc -l)${NC}"
+echo -e "   ${BLUE}• Selected profile: $(cat /home/firstb00t/profile)${NC}"
+echo -e "   ${BLUE}• Modules installed: $(ls /home/firstb00t/modules/*.enabled | wc -l)${NC}"
 echo -e "   ${BLUE}• Active services: $(systemctl list-units --type=service --state=active | wc -l)${NC}"
 echo -e "   ${BLUE}• Users created: $(grep -c "^[^:]*:[^:]*:[0-9]\{4\}" /etc/passwd)${NC}"
 

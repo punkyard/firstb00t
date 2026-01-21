@@ -4,12 +4,12 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 # 🔒 SSH Configuration Module (NSA Sec 7.11.1 — Strong Crypto)
-MODULE_ID="3-ssh_config"
+MODULE_ID="04-ssh_config"
 MODULE_NAME="SSH Configuration"
 MODULE_DESC="SSH hardening with strong crypto, source ACL, idle timeout (NSA Sec 7.11.1 + Sec 7.6)"
 
 # Default SSH port (can be overridden by environment variable)
-SSH_PORT="${SSH_PORT:-22}"
+SSH_PORT="${SSH_PORT:-22022}"
 # Source-based ACLs (NSA Sec 7.6)
 SSH_ALLOWED_SUBNETS="${SSH_ALLOWED_SUBNETS:-192.168.1.0/24,10.0.0.0/8}"
 SSHD_CONF_DIR="/etc/ssh/sshd_config.d"
@@ -135,7 +135,24 @@ MaxSessions 5
 MaxStartups 10:30:100
 LoginGraceTime 30
 
-# Include hardened crypto configs
+# explicit strong-algorithms in main config to ensure sshd -T shows hardened values
+# Strong Symmetric Ciphers
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes128-gcm@openssh.com
+
+# Strong Key Exchange Algorithms
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256
+
+# Strong Message Authentication Codes
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+
+# Strong Host Key Algorithms
+HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256
+
+# Idle session timeouts
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Include hardened crypto configs (also present in /etc/ssh/sshd_config.d/)
 Include /etc/ssh/sshd_config.d/99-*.conf
 EOF
     record_action "Main sshd_config configured (Port ${SSH_PORT})" "🔒"
@@ -185,13 +202,16 @@ configure_source_acl() {
     log info "Configuring source-based access control (NSA Sec 7.6)"
     cat > "${SSHD_CONF_DIR}/99-acl.conf" <<EOF
 # NSA Section 7.6 — Source-Based Access Control
-# Allow SSH only from management subnets
-Match Address ${SSH_ALLOWED_SUBNETS}
-    PasswordAuthentication no
-    PubkeyAuthentication yes
+# Allow SSH only from management subnets; deny all others
 
-# Deny all other sources
-Match Address *,!${SSH_ALLOWED_SUBNETS}
+# ✅ Allow from trusted subnets (key-based auth enforced)
+Match Address ${SSH_ALLOWED_SUBNETS}
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    AuthenticationMethods publickey
+
+# ❌ Deny all other sources
+Match Address *
     DenyUsers *
 EOF
     record_action "Source ACL: Allow ${SSH_ALLOWED_SUBNETS}, Deny others" "🛡️"
@@ -217,17 +237,35 @@ EOF
 }
 
 validate() {
-    explain "Running 6 validation checks to ensure correct SSH hardening"
+    explain "Running 7 validation checks to ensure correct SSH hardening"
     
-    # Check syntax
+    # 1️⃣ Check main config syntax
     if ! sshd -t 2>&1; then
-        check "SSH config syntax valid" "false"
-        log error "SSH config syntax invalid"
+        check "SSH config syntax valid (sshd -t)" "false"
+        log error "SSH config syntax invalid: $(sshd -t 2>&1 || true)"
         return 1
     fi
     check "SSH config syntax valid (sshd -t)" "true"
     
-    # Verify strong ciphers configured
+    # 2️⃣ Verify main config exists and has required settings
+    if [ ! -f /etc/ssh/sshd_config ]; then
+        check "SSH main config exists" "false"
+        log error "Missing /etc/ssh/sshd_config"
+        return 1
+    fi
+    if ! grep -q "Port ${SSH_PORT}" /etc/ssh/sshd_config; then
+        check "SSH port configured (Port ${SSH_PORT})" "false"
+        log error "Port ${SSH_PORT} not found in sshd_config"
+        return 1
+    fi
+    check "SSH main config present (Port ${SSH_PORT})" "true"
+    
+    # 3️⃣ Verify strong ciphers configured
+    if [ ! -f "${SSHD_CONF_DIR}/99-ciphers-hardened.conf" ]; then
+        check "Strong ciphers config exists" "false"
+        log error "Missing ${SSHD_CONF_DIR}/99-ciphers-hardened.conf"
+        return 1
+    fi
     if grep -q "aes256-gcm@openssh.com" "${SSHD_CONF_DIR}/99-ciphers-hardened.conf"; then
         check "Strong ciphers configured (AES-256-GCM)" "true"
     else
@@ -236,7 +274,12 @@ validate() {
         return 1
     fi
     
-    # Verify idle timeout configured
+    # 4️⃣ Verify idle timeout configured
+    if [ ! -f "${SSHD_CONF_DIR}/99-timeouts-hardened.conf" ]; then
+        check "Idle timeout config exists" "false"
+        log error "Missing ${SSHD_CONF_DIR}/99-timeouts-hardened.conf"
+        return 1
+    fi
     if grep -q "ClientAliveInterval 300" "${SSHD_CONF_DIR}/99-timeouts-hardened.conf"; then
         check "Idle timeout configured (300s)" "true"
     else
@@ -245,32 +288,45 @@ validate() {
         return 1
     fi
 
-    # Verify source ACL configured
-    if grep -q "Match Address" "${SSHD_CONF_DIR}/99-acl.conf"; then
+    # 5️⃣ Verify source ACL configured (both allow and deny rules)
+    if [ ! -f "${SSHD_CONF_DIR}/99-acl.conf" ]; then
+        check "Source ACL config exists" "false"
+        log error "Missing ${SSHD_CONF_DIR}/99-acl.conf"
+        return 1
+    fi
+    if [ -f "${SSHD_CONF_DIR}/99-acl.conf" ] && \
+       grep -q "Match Address" "${SSHD_CONF_DIR}/99-acl.conf" && \
+       grep -q "DenyUsers \*" "${SSHD_CONF_DIR}/99-acl.conf"; then
         check "Source-based ACL configured (NSA Sec 7.6)" "true"
     else
         check "Source-based ACL configured (NSA Sec 7.6)" "false"
-        log error "Source-based ACL not configured"
+        log error "Source-based ACL not properly configured"
         return 1
     fi
     
-    # Restart SSH and verify
+    # 6️⃣ Restart SSH and verify service restarts
     log info "Restarting SSH service to apply configuration"
-    systemctl restart ssh
+    if ! systemctl restart ssh 2>&1; then
+        check "SSH service restart" "false"
+        log error "SSH service restart failed: $(systemctl restart ssh 2>&1 || true)"
+        return 1
+    fi
     if systemctl is-active --quiet ssh; then
-        check "SSH service restarted successfully" "true"
+        check "SSH service running and active" "true"
     else
-        check "SSH service restarted successfully" "false"
-        log error "SSH service failed to restart"
+        check "SSH service running and active" "false"
+        log error "SSH service not active after restart"
         return 1
     fi
     
-    # Verify service is listening
-    if ss -tlnp 2>/dev/null | grep -q "sshd"; then
-        check "SSH service listening on port ${SSH_PORT}" "true"
+    # 7️⃣ Verify service is listening on configured port
+    sleep 1  # Give service a moment to stabilize
+    if ss -tlnp 2>/dev/null | grep -q ":${SSH_PORT}"; then
+        check "SSH listening on port ${SSH_PORT}" "true"
     else
-        check "SSH service listening on port ${SSH_PORT}" "false"
-        log error "SSH service not listening"
+        check "SSH listening on port ${SSH_PORT}" "false"
+        log error "SSH not listening on port ${SSH_PORT}"
+        log warn "Debug: active ports: $(ss -tlnp 2>/dev/null | grep sshd || true)"
         return 1
     fi
     

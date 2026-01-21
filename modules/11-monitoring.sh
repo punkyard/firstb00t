@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-# 📊 Module 10: Monitoring (AIDE, Centralized Rsyslog, NTP, Vulnerability Scanning)
-MODULE_ID="10-monitoring"
+# 📊 Module 11: Monitoring (AIDE, Centralized Rsyslog, NTP, Vulnerability Scanning)
+MODULE_ID="11-monitoring"
 MODULE_VERSION="2.1.0"
 MODULE_DESCRIPTION="file integrity monitoring (AIDE), centralized logging (rsyslog), time synchronization (NTP), vulnerability scanning (Lynis)"
 

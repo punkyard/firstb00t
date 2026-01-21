@@ -12,7 +12,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
 # 📋 module information
-MODULE_ID="3-ssh_hardening"
+MODULE_ID="05-ssh_hardening"
 SSH_PORT="${SSH_PORT:-22022}"
 
 log() {

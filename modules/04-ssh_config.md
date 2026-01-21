@@ -1,4 +1,4 @@
-# 🔐 SSH configuration module (3-ssh_config)
+# 🔐 SSH configuration module (04-ssh_config)
 
 ## 🎯 Purpose
 
@@ -52,13 +52,37 @@ ClientAliveCountMax 2         # Disconnect after 2 missed responses = 600s total
 
 **File:** `/etc/ssh/sshd_config`
 
-- Port 22 (default; can be overridden via SSH_PORT environment variable per profile)
+- Port 22022 (configurable via `$SSH_PORT` environment variable; can be overridden per profile)
 - PermitRootLogin no
 - PasswordAuthentication no (key-based only)
 - PubkeyAuthentication yes
 - UsePAM yes (integrates with PAM for account/session management)
 - X11Forwarding no
 - LogLevel VERBOSE (logs all authentication attempts to syslog, integrated with Module 10)
+
+### D. Source-Based Access Control (NSA Sec 7.6)
+
+**File:** `/etc/ssh/sshd_config.d/99-acl.conf`
+
+The module creates two `Match Address` blocks for network-layer access control:
+
+1. **Allow trusted subnets** (default: `192.168.1.0/24,10.0.0.0/8`):
+   ```bash
+   Match Address ${SSH_ALLOWED_SUBNETS}
+       PubkeyAuthentication yes
+       PasswordAuthentication no
+       AuthenticationMethods publickey
+   ```
+
+   **Note:** `AuthenticationMethods publickey` enforces public-key-only authentication for matched addresses.
+
+2. **Deny all others**:
+   ```bash
+   Match Address *
+       DenyUsers *
+   ```
+
+**Configuration:** Set `$SSH_ALLOWED_SUBNETS` environment variable before module execution to customize trusted sources. Default denies all IPs outside the allowed subnets.
 
 ## 🔧 Prerequisites
 
@@ -100,7 +124,7 @@ sudo systemctl restart ssh
 
 ## 📝 Logging
 
-- **Log File:** `/var/log/firstboot/3-ssh_config.log`
+- **Log File:** `/var/log/firstboot/04-ssh_config.log`
 - **Format:** ISO8601 timestamp, log level, module ID, message
 - **Integration:** SSH daemon logs all authentication attempts to syslog (LogLevel VERBOSE), forwarded to centralized rsyslog by Module 10
 
@@ -111,7 +135,7 @@ sudo systemctl restart ssh
 - OpenSSH Manual: man 5 sshd_config
 
 Logs are written to:
-- `/var/log/firstboot/3-ssh_config.log`
+- `/var/log/firstboot/04-ssh_config.log`
 
 ## 🔗 Related modules
-- **4-ssh_hardening** — advanced SSH security hardening (runs after 3-ssh_config)
+- **05-ssh_hardening** — advanced SSH security hardening (runs after 04-ssh_config)

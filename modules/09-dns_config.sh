@@ -1,11 +1,11 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# 📋 Module 8: DNS Configuration with DNSSEC
+# 📋 Module 09: DNS Configuration with DNSSEC
 # Purpose: Enable DNSSEC validation for DNS security (prevent spoofing/cache poisoning)
 # References: NSA Sec 7.9 (DNS security), TuxCare #06 (protocol vulnerabilities)
 
-MODULE_ID="8-dns_config"
+MODULE_ID="09-dns_config"
 
 # 🔐 Logging
 log() {

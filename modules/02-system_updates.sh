@@ -10,7 +10,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
 # 📋 Module: System Updates with Rollback
-MODULE_ID="1-system_updates"
+MODULE_ID="02-system_updates"
 MODULE_NAME="System Updates with Rollback Capability"
 MODULE_VERSION="2.0.0"
 MODULE_DESCRIPTION="Debian system updates with timeshift snapshots for safe rollback"

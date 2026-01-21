@@ -12,6 +12,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
 # 📋 Module information
+MODULE_ID="10-mail_config"
 MODULE_NAME="mail_config"
 MODULE_VERSION="1.0.0"
 MODULE_DESCRIPTION="mail server configuration"
@@ -231,9 +232,9 @@ restart_services() {
 
 # 🎯 main function
 main() {
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ 🚀 installing module $MODULE_NAME...                    
-╚════════════════════════════════════════════════════════════${NC}"
+    source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+
+    print_title_frame "📧" "installing module ${MODULE_NAME}..."
     # profile enablement
     if [ ! -f "/etc/firstboot/modules/${MODULE_NAME}.enabled" ]; then
         log_action "info: module disabled for this profile; skipping"

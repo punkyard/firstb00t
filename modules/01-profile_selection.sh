@@ -10,6 +10,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
 # 📋 Module information
+MODULE_ID="01-profile_selection"
 MODULE_NAME="profile_selection"
 MODULE_VERSION="1.0.0"
 MODULE_DESCRIPTION="security profile selection and configuration"
@@ -34,8 +35,8 @@ handle_error() {
 cleanup() {
     echo -e "${YELLOW}🧹 Cleaning up...${NC}"
     # restore original config if needed
-    if [ -f /etc/firstboot/profile.bak ]; then
-        mv /etc/firstboot/profile.bak /etc/firstboot/profile
+    if [ -f /home/firstb00t/profile.bak ]; then
+        mv /home/firstb00t/profile.bak /home/firstb00t/profile
     fi
     log_action "info: cleanup completed"
 }
@@ -116,7 +117,7 @@ configure_ssh_port() {
     
     # Export for SSH modules
     export SSH_PORT="$ssh_port"
-    echo "$ssh_port" > /etc/firstboot/ssh_port
+    echo "$ssh_port" > /home/firstb00t/ssh_port
     echo "✅ SSH port configured: ${ssh_port}"
     log_action "info : SSH port configured to ${ssh_port}"
 }
@@ -155,7 +156,7 @@ configure_admin_email() {
     
     # Export for modules
     export ADMIN_EMAIL="$admin_email"
-    echo "$admin_email" > /etc/firstboot/admin_email
+    echo "$admin_email" > /home/firstb00t/admin_email
     echo "✅ Admin email configured: ${admin_email}"
     log_action "info : Admin email configured to ${admin_email}"
 }
@@ -165,7 +166,7 @@ configure_ssh_honeypot() {
     # Skip if non-interactive
     if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
         export HONEYPOT_ENABLED="false"
-        echo "false" > /etc/firstboot/honeypot_enabled
+        echo "false" > /home/firstb00t/honeypot_enabled
         echo "⏭️  Honeypot disabled (non-interactive mode)"
         log_action "info : SSH honeypot disabled (non-interactive)"
         return
@@ -219,14 +220,14 @@ configure_ssh_honeypot() {
         else
             export HONEYPOT_ENABLED="true"
             export HONEYPOT_WHITELIST_IP="$mgmt_ip"
-            echo "true" > /etc/firstboot/honeypot_enabled
-            echo "$mgmt_ip" > /etc/firstboot/honeypot_whitelist_ip
+            echo "true" > /home/firstb00t/honeypot_enabled
+            echo "$mgmt_ip" > /home/firstb00t/honeypot_whitelist_ip
             echo "✅ Honeypot enabled. Whitelisted IP: ${mgmt_ip}"
             log_action "info : SSH honeypot enabled with whitelist ${mgmt_ip}"
         fi
     else
         export HONEYPOT_ENABLED="false"
-        echo "false" > /etc/firstboot/honeypot_enabled
+        echo "false" > /home/firstb00t/honeypot_enabled
         echo "⏭️  Honeypot disabled. Port 22 will be closed by firewall."
         log_action "info : SSH honeypot disabled"
     fi
@@ -249,18 +250,19 @@ select_profile() {
         # display available profiles
         echo ""
         echo -e "${CYAN}Available profiles:${NC}"
-        echo "  🟢 basic    - Essential security"
-        echo "  🟡 standard - Balanced security"
-        echo "  🔴 advanced - Maximum security"
+        echo "  🟢 basic      - Essential security"
+        echo "  🟡 standard   - Balanced security"
+        echo "  🔴 advanced   - Maximum security"
+        echo "  🔶 step by step - Interactive module selection"
         echo ""
         
         # prompt for profile selection
-        read -p "Choose profile (basic/standard/advanced): " selected_profile
+        read -p "Choose profile (basic/standard/advanced/step by step): " selected_profile
     fi
     
     # validate selection
     case "$selected_profile" in
-        "basic"|"standard"|"advanced")
+        "basic"|"standard"|"advanced"|"step by step")
             echo -e "${GREEN}✅ Profile selected: $selected_profile${NC}"
             log_action "info: profile selected: $selected_profile"
             ;;
@@ -270,8 +272,8 @@ select_profile() {
     esac
     
     # save profile selection
-    mkdir -p /etc/firstboot
-    echo "$selected_profile" > /etc/firstboot/profile
+    mkdir -p /home/firstb00t
+    echo "$selected_profile" > /home/firstb00t/profile
     
     log_action "info: profile selection completed"
 }
@@ -282,10 +284,10 @@ configure_profile() {
     echo -e "${BLUE}⚙️ Configuring profile...${NC}"
     
     # read selected profile
-    selected_profile=$(cat /etc/firstboot/profile)
+    selected_profile=$(cat /home/firstb00t/profile)
     
     # 🔶 ensure modules directory exists
-    mkdir -p /etc/firstboot/modules
+    mkdir -p /home/firstb00t/modules
     
     # configure based on profile
     case "$selected_profile" in
@@ -293,43 +295,49 @@ configure_profile() {
             # basic profile configuration
             echo -e "${BLUE}📦 Profile: basic${NC}"
             # enable basic modules
-            touch /etc/firstboot/modules/02-system_updates.enabled
-            touch /etc/firstboot/modules/03-user_management.enabled
+            touch /home/firstb00t/modules/02-system_updates.enabled
+            touch /home/firstb00t/modules/03-user_management.enabled
             # Temporarily skip SSH modules for testing to preserve log access
-            # touch /etc/firstboot/modules/04-ssh_config.enabled
-            # touch /etc/firstboot/modules/05-ssh_hardening.enabled
-            touch /etc/firstboot/modules/06-firewall_config.enabled
-            touch /etc/firstboot/modules/11-monitoring.enabled
+            # touch /home/firstb00t/modules/04-ssh_config.enabled
+            # touch /home/firstb00t/modules/05-ssh_hardening.enabled
+            touch /home/firstb00t/modules/06-firewall_config.enabled
+            touch /home/firstb00t/modules/11-monitoring.enabled
             echo -e "${YELLOW}⚠️  SSH hardening modules skipped (testing mode)${NC}"
             ;;
         "standard")
             # standard profile configuration
             echo -e "${BLUE}📦 Profile: standard${NC}"
             # enable standard modules
-            touch /etc/firstboot/modules/02-system_updates.enabled
-            touch /etc/firstboot/modules/03-user_management.enabled
-            touch /etc/firstboot/modules/04-ssh_config.enabled
-            touch /etc/firstboot/modules/05-ssh_hardening.enabled
-            touch /etc/firstboot/modules/06-firewall_config.enabled
-            touch /etc/firstboot/modules/07-fail2ban.enabled
-            touch /etc/firstboot/modules/08-ssl_config.enabled
-            touch /etc/firstboot/modules/09-dns_config.enabled
-            touch /etc/firstboot/modules/10-mail_config.enabled
+            touch /home/firstb00t/modules/02-system_updates.enabled
+            touch /home/firstb00t/modules/03-user_management.enabled
+            touch /home/firstb00t/modules/04-ssh_config.enabled
+            touch /home/firstb00t/modules/05-ssh_hardening.enabled
+            touch /home/firstb00t/modules/06-firewall_config.enabled
+            touch /home/firstb00t/modules/07-fail2ban.enabled
+            touch /home/firstb00t/modules/08-ssl_config.enabled
+            touch /home/firstb00t/modules/09-dns_config.enabled
+            touch /home/firstb00t/modules/10-mail_config.enabled
             ;;
         "advanced")
             # advanced profile configuration
             echo -e "${BLUE}📦 Profile: advanced${NC}"
             # enable all modules
-            touch /etc/firstboot/modules/02-system_updates.enabled
-            touch /etc/firstboot/modules/03-user_management.enabled
-            touch /etc/firstboot/modules/04-ssh_config.enabled
-            touch /etc/firstboot/modules/05-ssh_hardening.enabled
-            touch /etc/firstboot/modules/06-firewall_config.enabled
-            touch /etc/firstboot/modules/07-fail2ban.enabled
-            touch /etc/firstboot/modules/08-ssl_config.enabled
-            touch /etc/firstboot/modules/09-dns_config.enabled
-            touch /etc/firstboot/modules/10-mail_config.enabled
-            touch /etc/firstboot/modules/11-monitoring.enabled
+            touch /home/firstb00t/modules/02-system_updates.enabled
+            touch /home/firstb00t/modules/03-user_management.enabled
+            touch /home/firstb00t/modules/04-ssh_config.enabled
+            touch /home/firstb00t/modules/05-ssh_hardening.enabled
+            touch /home/firstb00t/modules/06-firewall_config.enabled
+            touch /home/firstb00t/modules/07-fail2ban.enabled
+            touch /home/firstb00t/modules/08-ssl_config.enabled
+            touch /home/firstb00t/modules/09-dns_config.enabled
+            touch /home/firstb00t/modules/10-mail_config.enabled
+            touch /home/firstb00t/modules/11-monitoring.enabled
+            ;;
+        "step by step")
+            # step by step profile configuration
+            echo -e "${BLUE}📦 Profile: step by step${NC}"
+            echo "Interactive module selection will be handled by the main script"
+            # No modules enabled by default - main script will prompt for each
             ;;
     esac
     
@@ -342,17 +350,17 @@ validate_profile() {
     echo -e "${BLUE}✅ Validating profile...${NC}"
     
     # check if profile file exists
-    if [ ! -f /etc/firstboot/profile ]; then
+    if [ ! -f /home/firstb00t/profile ]; then
         handle_error "profile file not found" "profile validation"
     fi
     
     # check if modules directory exists
-    if [ ! -d /etc/firstboot/modules ]; then
+    if [ ! -d /home/firstb00t/modules ]; then
         handle_error "modules directory not found" "profile validation"
     fi
     
     # check if at least one module is enabled
-    if ! ls /etc/firstboot/modules/*.enabled > /dev/null 2>&1; then
+    if ! ls /home/firstb00t/modules/*.enabled > /dev/null 2>&1; then
         handle_error "no modules enabled" "profile validation"
     fi
     
@@ -361,11 +369,10 @@ validate_profile() {
 
 # 🎯 main function
 main() {
-    echo ""
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ ${GREEN}🚀 Installing module ${CYAN}$MODULE_NAME${GREEN}
-╚════════════════════════════════════════════════════════════${NC}"
-    echo ""
+    # ensure common logging utilities are available
+    source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+
+    print_title_frame "🚀" "installing module ${MODULE_NAME}..."
 
     # check dependencies
     check_dependencies

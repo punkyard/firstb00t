@@ -1,3 +1,6 @@
+
+# 🚧 repo in development - DO NOT USE yet 🚧
+
 ![](docs/punkyard-firstb00t.png)
 
 # 🚀 Firstb00t — your Debian server's first safe steps

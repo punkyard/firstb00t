@@ -1,11 +1,11 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# 📋 Module 2: User Management
+# 📋 Module 03: User Management
 # Purpose: Enforce NSA Sec 5.x authentication hardening (strong passwords, MFA, auth logging)
 # References: NSA Sec 4.1-4.6 (AAA), Sec 5.1-5.3 (passwords), TuxCare #07 (MFA), #09 (credential hygiene)
 
-MODULE_ID="2-user_management"
+MODULE_ID="03-user_management"
 
 # 🔐 Logging
 log() {

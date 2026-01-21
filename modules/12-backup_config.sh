@@ -4,9 +4,9 @@ IFS=$'\n\t'
 
 # 💾 BorgBackup Volume Protection Module
 # Backs up Docker volumes with encryption, deduplication, retention policy
-# Logs to /var/log/firstb00t/11-backup_config.log
+# Logs to /var/log/firstb00t/12-backup_config.log
 
-MODULE_ID="11-backup_config"
+MODULE_ID="12-backup_config"
 LOG_DIR="/var/log/firstb00t"
 ENV_FILE="${ENV_FILE:-/etc/firstboot/backup.env}"
 INVENTORY_FILE="${INVENTORY_FILE:-/etc/firstboot/backup.inventory}"

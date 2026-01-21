@@ -7,7 +7,7 @@ IFS=$'\n\t'
 # Sequential by default; optional GNU parallel for concurrency
 # Logs to /var/log/firstb00t/12-server_orchestration.log
 
-MODULE_ID="12-server_orchestration"
+MODULE_ID="13-server_orchestration"
 LOG_DIR="/var/log/firstb00t"
 INVENTORY_FILE="${INVENTORY_FILE:-/etc/firstboot/backup.inventory}"
 SSH_USER="${SSH_USER:-root}"

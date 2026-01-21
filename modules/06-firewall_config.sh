@@ -12,6 +12,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # no color
 
 # 📋 Module information
+MODULE_ID="06-firewall_config"
 MODULE_NAME="firewall_config"
 MODULE_VERSION="1.0.0"
 MODULE_DESCRIPTION="firewall configuration with ufw"
@@ -116,14 +117,19 @@ configure_firewall() {
     ufw allow out 587/tcp comment 'Allow SMTP submission' || handle_error "submission egress rule failed" "egress filtering"
     log_action "info: egress filtering configured"
     
-    # allow ssh (configurable port, default 22222)
-    SSH_PORT=${SSH_PORT:-22222}
+    # Disable ping (ICMP echo) for security
+    echo -e "${BLUE}🚫 Disabling ping responses...${NC}"
+    ufw reject in icmp type 8 comment 'Reject ping (ICMP echo-request)' || handle_error "ping disable rule failed" "icmp filtering"
+    log_action "info: ping responses disabled"
+    
+    # allow ssh (configurable port, default 22022)
+    SSH_PORT=${SSH_PORT:-22022}
 
     # Optional: restrict SSH to a user allowlist created during VPS bootstrap
     # One entry per line, e.g.:
     #   203.0.113.45/32
     #   2001:db8:85a3::8a2e:370:7334/128
-    SSH_ALLOWLIST_FILE="/etc/firstboot/ssh_allowlist"
+    SSH_ALLOWLIST_FILE="/home/firstb00t/ssh_allowlist"
 
     if [ -s "$SSH_ALLOWLIST_FILE" ]; then
         echo -e "${BLUE}🔐 Restricting SSH to allowlisted IPs...${NC}"
@@ -179,10 +185,8 @@ restart_service() {
 
 # 🎯 main function
 main() {
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════
-║ ${GREEN}🚀 Installing module ${CYAN}$MODULE_NAME${GREEN}...
-║${CYAN}
-╚════════════════════════════════════════════════════════════${NC}"
+    source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+    print_title_frame "🔥" "installation of the firewall..."
 
     # check dependencies
     check_dependencies

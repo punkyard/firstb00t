@@ -91,7 +91,7 @@ configure_ssh_port() {
     if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
         ssh_port="22022"
         export SSH_PORT="$ssh_port"
-        echo "$ssh_port" > /etc/firstboot/ssh_port
+        echo "$ssh_port" > /home/firstb00t/ssh_port
         echo "✅ SSH port configured: ${ssh_port} (default, non-interactive)"
         log_action "info : SSH port configured to ${ssh_port} (non-interactive)"
         return
@@ -128,7 +128,7 @@ configure_admin_email() {
     if [ "${FIRSTBOOT_NON_INTERACTIVE:-false}" = "true" ]; then
         admin_email="root@localhost"
         export ADMIN_EMAIL="$admin_email"
-        echo "$admin_email" > /etc/firstboot/admin_email
+        echo "$admin_email" > /home/firstb00t/admin_email
         echo "✅ Admin email configured: ${admin_email} (default, non-interactive)"
         log_action "info : Admin email configured to ${admin_email} (non-interactive)"
         return

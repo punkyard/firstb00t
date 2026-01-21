@@ -98,6 +98,32 @@ mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
 # =======================================================================
+# FIRST ACTION: System preparation (apt update + sudo user)
+# =======================================================================
+
+echo -e "${BLUE}🔄 System preparation...${NC}"
+
+echo -e "${YELLOW}📦 Updating package lists...${NC}"
+apt update
+log_action "info: apt update completed"
+
+echo -e "${YELLOW}👤 Creating sudo user...${NC}"
+# Create sudo user if not exists
+if ! id "sudo" &>/dev/null; then
+    useradd -m -s /bin/bash sudo
+    echo "sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sudo
+    chmod 440 /etc/sudoers.d/sudo
+    echo -e "${GREEN}✅ Sudo user created${NC}"
+    log_action "info: sudo user created"
+else
+    echo -e "${GREEN}✅ Sudo user already exists${NC}"
+    log_action "info: sudo user already exists"
+fi
+
+echo -e "${YELLOW}🔄 Switching to sudo user to continue installation...${NC}"
+exec su - sudo
+
+# =======================================================================
 # PART A: SSH key injection
 # =======================================================================
 
@@ -246,32 +272,7 @@ log_action "info: user instructed to test SSH key access from local machine"
 echo ""
 
 # =======================================================================
-# PART D: System preparation
-# =======================================================================
-
-echo -e "${BLUE}🔄 Part D: Preparing system...${NC}"
-
-echo -e "${YELLOW}📦 Updating package lists...${NC}"
-apt update
-log_action "info: apt update completed"
-
-echo -e "${YELLOW}👤 Creating sudo user...${NC}"
-# Create sudo user if not exists
-if ! id "sudo" &>/dev/null; then
-    useradd -m -s /bin/bash sudo
-    echo "sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sudo
-    chmod 440 /etc/sudoers.d/sudo
-    echo -e "${GREEN}✅ Sudo user created${NC}"
-    log_action "info: sudo user created"
-else
-    echo -e "${GREEN}✅ Sudo user already exists${NC}"
-    log_action "info: sudo user already exists"
-fi
-
-echo ""
-
-# =======================================================================
-# PART E: Module installation
+# PART D: Module installation
 # =======================================================================
 
 if [[ "${NO_MODULES}" == "true" ]]; then
@@ -283,13 +284,13 @@ fi
 cat <<EOF
 ${CYAN}
 
-  .d888 d8b                  888    888       .d8888b.   .d8888b.  888    
-d88P"  Y8P                  888    888      d88P  Y88b d88P  Y88b 888    
-888                         888    888      888    888 888    888 888    
-888888 888 888d888 .d8888b  888888 88888b.  888    888 888    888 888888 
-888    888 888P"   88K      888    888 "88b 888    888 888    888 888    
-888    888 888     "Y8888b. 888    888  888 888    888 888    888 888    
-888    888 888          X88 Y88b.  888 d88P Y88b  d88P Y88b  d88P Y88b.  
+  .d888 d8b                  888    888       .d8888b.   .d8888b.  888
+d88P"  Y8P                  888    888      d88P  Y88b d88P  Y88b 888
+888                         888    888      888    888 888    888 888
+888888 888 888d888 .d8888b  888888 88888b.  888    888 888    888 888888
+888    888 888P"   88K      888    888 "88b 888    888 888    888 888
+888    888 888     "Y8888b. 888    888  888 888    888 888    888 888
+888    888 888          X88 Y88b.  888 d88P Y88b  d88P Y88b  d88P Y88b.
 888    888 888      88888P'  "Y888 88888P"   "Y8888P"   "Y8888P"   "Y888
 
 ${NC}
@@ -379,10 +380,10 @@ echo -e "${GREEN}✅ Module installation completed${NC}"
 log_action "success: module installation completed"
 
 # =======================================================================
-# PART F: Finalization
+# PART E: Finalization
 # =======================================================================
 
-echo -e "${BLUE}✅ Part F: Finalizing installation...${NC}"
+echo -e "${BLUE}✅ Part E: Finalizing installation...${NC}"
 
 echo -e "${YELLOW}🧹 Cleaning up temporary files...${NC}"
 rm -f /tmp/script_temp_*

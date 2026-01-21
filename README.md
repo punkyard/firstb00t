@@ -92,10 +92,11 @@ curl -O https://raw.githubusercontent.com/lerez0/firstb00t/main/firstb00t.sh && 
 
 **Step 4: ✅ Automated hardening (runs on VPS)**
 The setup script will ask:
-- 🔹 **security level?** (BASIC / STANDARD / ADVANCED)
+- 🔹 **security level?** (BASIC / STANDARD / ADVANCED / STEP BY STEP)
   - **BASIC** = essentials (everyone needs this)
   - **STANDARD** = production-ready (email, SSL, backup)
   - **ADVANCED** = maximum security (intrusion detection)
+  - **STEP BY STEP** = interactive module selection (choose each component individually)
 - 🔹 **username for login?** (e.g., `vps-admin`)
 - 🔹 **custom SSH port?** (default: `22022`, not `22`)
 - 🔹 **SSH public key?** (paste from your local terminal output)
@@ -127,6 +128,14 @@ All standard, plus:
 - **Intrusion Detection** — OSSEC watches 24/7
 - **App Armor** — extra container/app protection
 - **Custom Hardening** — for experts
+
+### 🔄 New Features (Latest Update)
+- **Step-by-Step Profile**: Interactive module selection for custom setups
+- **Immediate Security**: apt update and sudo user creation happen first on server
+- **Ping Protection**: Server doesn't respond to ping (ICMP echo) for reduced visibility
+- **Aggressive Fail2ban**: Bans non-SSH-key attempts immediately and permanently
+- **User Context**: Runs as dedicated sudo user after initial setup
+- **Folder Structure**: Configuration moved to /home/firstb00t for better organization
 
 ---
 

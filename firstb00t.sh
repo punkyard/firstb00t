@@ -15,7 +15,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo ""
-source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+source "$(dirname "${BASH_SOURCE[0]}")/common/logging.sh" 2>/dev/null || true
 print_title_frame "🔑" "firstb00t - LOCAL helper"
 echo ""
 

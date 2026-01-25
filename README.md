@@ -53,29 +53,21 @@ This means your server follows enterprise-grade security practices from day one,
 
 ---
 
-## 🚀 Quick start (two-step process)
-
-**🖥️ Step 1: Run this on YOUR computer** (not on the VPS!)  
-This helper script prepares everything **locally** before connecting to your server.
+## 🚀 Quick start
 
 **Prerequisites:** get your VPS credentials from your provider**
 - 🔑 IP address (e.g., IPv4 `203.0.113.42` and/or IPv6 `2001:db8:85a3::8a2e:370:7334`)
 - 🔑 root password or existing SSH access
 
-**🎯 Local command** (macOS, Linux, or WSL):
+**🖥️ **   
+
+**🎯 Single command** (macOS, Linux, or WSL):
+
+Open a terminal window and open a folder to download the firstb00t script (eg, ~/Downloads)
 
 ```bash
+cd ~/Downloads
 curl -O https://raw.githubusercontent.com/lerez0/firstb00t/main/firstb00t.sh && bash firstb00t.sh
-```
-
-**🖥️ Step 2: Run this on YOUR VPS** (after connecting with the SSH command from step 1)
-
-```bash
-# Connect to your VPS first using the command shown by firstb00t.sh
-ssh root@your-vps-ip
-
-# Then run the setup script
-bash setup/debian.sh
 ```
 
 ### 🛠️ What happens next
@@ -89,7 +81,12 @@ bash setup/debian.sh
 
 **Step 2: 🚀 VPS setup**
 - connect to VPS using the provided SSH command
-- run `bash setup/debian.sh` on the server
+- download and run the setup script:
+  ```bash
+  cd /home
+  wget https://raw.githubusercontent.com/lerez0/firstb00t/main/github/setup/debian.sh
+  bash debian.sh
+  ```
 - script performs early system preparation (apt update, sudo user creation)
 - switches to sudo user for continued execution
 - **first-time connection:** type `yes` when asked about fingerprint verification
@@ -139,7 +136,6 @@ All standard, plus:
 - **Ping Protection**: Server doesn't respond to ping (ICMP echo) for reduced visibility
 - **Aggressive Fail2ban**: Bans non-SSH-key attempts immediately and permanently
 - **User Context**: Runs as dedicated sudo user after initial setup
-- **Folder Structure**: Configuration moved to `/home/firstb00t` for better organization
 
 ---
 

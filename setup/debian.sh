@@ -181,11 +181,16 @@ fi
 
 # If we haven't already re-exec'd as the admin user, do so now (guarded)
 if [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    # ensure password state is ok; clear forced-change if chage exists
+    if command -v chage >/dev/null 2>&1; then
+        chage -d "$(date +%F)" "$ADMIN_USER" || true
+    fi
+
     export FIRSTBOOT_REEXEC=1
     echo -e "${YELLOW}🔁 restarting script as '$ADMIN_USER' to continue...${NC}"
-    # Re-run the script as the admin user in interactive mode to continue safely
+    # Re-run the script as the admin user in interactive mode using sudo (avoids PAM su quirks)
     SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
-    exec su - "$ADMIN_USER" -c "env FIRSTBOOT_REEXEC=1 bash -lc 'bash \"$SCRIPT_PATH\" --interactive'"
+    exec sudo -u "$ADMIN_USER" env FIRSTBOOT_REEXEC=1 bash -lc "bash \"$SCRIPT_PATH\" --interactive"
 fi
 fi
 

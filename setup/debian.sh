@@ -21,7 +21,9 @@ MODULE_NAME="debian_setup"
 NON_INTERACTIVE="false"
 NO_MODULES="false"
 SKIP_SSH_HARDENING="false"
+SKIP_KEY="false"
 PROFILE="basic"
+FIRSTBOOT_REEXEC=""
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -46,8 +48,12 @@ while [[ $# -gt 0 ]]; do
             SKIP_SSH_HARDENING="true"
             shift
             ;;
+        --skip-key)
+            SKIP_KEY="true"
+            shift
+            ;;
         -h|--help)
-            echo -e "${BLUE}Usage: $0 [--profile basic|standard|advanced] [--non-interactive|--interactive] [--no-modules] [--skip-ssh-hardening]${NC}"
+            echo -e "${BLUE}Usage: $0 [--profile basic|standard|advanced] [--non-interactive|--interactive] [--no-modules] [--skip-ssh-hardening] [--skip-key]${NC}"
             exit 0
             ;;
         *)
@@ -121,17 +127,33 @@ echo -e "${YELLOW}📦 Updating package lists...${NC}"
 apt update
 log_action "info: apt update completed"
 
-echo -e "${YELLOW}👤 Creating sudo user...${NC}"
-# Create sudo user if not exists
-if ! id "sudo" &>/dev/null; then
-    useradd -m -s /bin/bash sudo
-    echo "sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sudo
-    chmod 440 /etc/sudoers.d/sudo
-    echo -e "${GREEN}✅ Sudo user created${NC}"
-    log_action "info: sudo user created"
+echo -e "${YELLOW}👤 creating admin user...${NC}"
+# Prompt for admin username and create it correctly; default is 'firstb00t'
+DEFAULT_ADMIN="${ADMIN_USER:-firstb00t}"
+read -r -p "admin username [${DEFAULT_ADMIN}]: " ADMIN_USER_INPUT
+ADMIN_USER="${ADMIN_USER_INPUT:-$DEFAULT_ADMIN}"
+
+if id "$ADMIN_USER" &>/dev/null; then
+    echo -e "${GREEN}✅ admin user '$ADMIN_USER' already exists${NC}"
+    log_action "info: admin user $ADMIN_USER exists"
 else
-    echo -e "${GREEN}✅ Sudo user already exists${NC}"
-    log_action "info: sudo user already exists"
+    useradd -m -s /bin/bash -G sudo "$ADMIN_USER"
+    echo "$ADMIN_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${ADMIN_USER}"
+    chmod 440 "/etc/sudoers.d/${ADMIN_USER}"
+    echo -e "${GREEN}✅ admin user '$ADMIN_USER' created${NC}"
+    log_action "info: admin user $ADMIN_USER created"
+    # expire password so admin must set one on first login (safe default)
+    passwd -e "$ADMIN_USER" || true
+fi
+
+# If we haven't already re-exec'd as the admin user, do so now (guarded)
+if [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    export FIRSTBOOT_REEXEC=1
+    echo -e "${YELLOW}🔁 restarting script as '$ADMIN_USER' to continue...${NC}"
+    # Re-run the script as the admin user in interactive mode to continue safely
+    SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
+    exec su - "$ADMIN_USER" -c "env FIRSTBOOT_REEXEC=1 bash -lc 'bash \"$SCRIPT_PATH\" --interactive'"
+fi
 fi
 
 echo -e "${YELLOW}🔄 Switching to sudo user to continue installation...${NC}"

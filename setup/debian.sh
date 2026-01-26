@@ -113,19 +113,22 @@ fi
 print_title_frame "🔧" "Debian setup (SSH key + allowlist + modules)"
 echo ""
 
-# Create .ssh directory
-mkdir -p /root/.ssh
-chmod 700 /root/.ssh
+# Only run root-only initialization when running as root and not during re-exec
+if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    # Create .ssh directory
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
 
-# =======================================================================
-# FIRST ACTION: System preparation (apt update + sudo user)
-# =======================================================================
+    # =======================================================================
+    # FIRST ACTION: System preparation (apt update + sudo user)
+    # =======================================================================
 
-echo -e "${BLUE}🔄 System preparation...${NC}"
+    echo -e "${BLUE}🔄 System preparation...${NC}"
 
-echo -e "${YELLOW}📦 Updating package lists...${NC}"
-apt update
-log_action "info: apt update completed"
+    echo -e "${YELLOW}📦 Updating package lists...${NC}"
+    apt update
+    log_action "info: apt update completed"
+fi
 
 echo -e "${YELLOW}👤 creating admin user...${NC}"
 # Prompt for admin username and create it correctly; default is 'firstb00t'

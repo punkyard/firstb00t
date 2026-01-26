@@ -189,19 +189,18 @@ if [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
 fi
 fi
 
-echo -e "${YELLOW}🔄 Switching to sudo user to continue installation...${NC}"
-exec su - sudo
-
 # =======================================================================
-# PART A: SSH key injection
+# PART A: SSH key injection (run only on initial root execution)
 # =======================================================================
 
-echo -e "${BLUE}📋 Part A: SSH public key${NC}"
-echo ""
-echo -e "${YELLOW}Paste your SSH public key from your LOCAL machine.${NC}"
-echo -e "${YELLOW}Tip (local machine): run: bash firstb00t.sh${NC}"
-echo -e "${YELLOW}It looks like: ssh-ed25519 AAAAC3... [user@host]${NC}"
-echo ""
+if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    echo -e "${BLUE}📋 Part A: SSH public key${NC}"
+    echo ""
+    echo -e "${YELLOW}Paste your SSH public key from your LOCAL machine.${NC}"
+    echo -e "${YELLOW}Tip (local machine): run: bash firstb00t.sh${NC}"
+    echo -e "${YELLOW}It looks like: ssh-ed25519 AAAAC3... [user@host]${NC}"
+    echo ""
+fi
 
 if [[ "${NON_INTERACTIVE}" == "true" ]]; then
     if [[ -s /root/.ssh/authorized_keys ]]; then
@@ -241,23 +240,25 @@ else
 fi
 
 # =======================================================================
-# PART B: IP allowlist
+# PART B: IP allowlist (run only on initial root execution)
 # =======================================================================
 
-echo -e "${BLUE}📍 Part B: Your public IP(s) (SSH firewall allowlist)${NC}"
-echo ""
-echo -e "${YELLOW}💡 Beginner explanation:${NC}"
-echo -e "${YELLOW}A firewall is a security gate.${NC}"
-echo -e "${YELLOW}An allowlist (aka whitelist) is a list of IP addresses allowed through the gate.${NC}"
-echo ""
-echo -e "${YELLOW}If you enter your public IPv4 and/or IPv6, we will allow SSH ONLY from you.${NC}"
-echo -e "${YELLOW}If you skip this, SSH may be reachable from the whole internet (less safe).${NC}"
-echo ""
-echo -e "${YELLOW}🔶 IMPORTANT: copy-paste your IPs from your LOCAL terminal output.${NC}"
-echo -e "${YELLOW}If you lost them, you can re-check from your local machine with:${NC}"
-echo -e "${YELLOW}  • IPv4: curl -4 ifconfig.me${NC}"
-echo -e "${YELLOW}  • IPv6: curl -6 ifconfig.me${NC}"
-echo ""
+if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    echo -e "${BLUE}📍 Part B: Your public IP(s) (SSH firewall allowlist)${NC}"
+    echo ""
+    echo -e "${YELLOW}💡 Beginner explanation:${NC}"
+    echo -e "${YELLOW}A firewall is a security gate.${NC}"
+    echo -e "${YELLOW}An allowlist (aka whitelist) is a list of IP addresses allowed through the gate.${NC}"
+    echo ""
+    echo -e "${YELLOW}If you enter your public IPv4 and/or IPv6, we will allow SSH ONLY from you.${NC}"
+    echo -e "${YELLOW}If you skip this, SSH may be reachable from the whole internet (less safe).${NC}"
+    echo ""
+    echo -e "${YELLOW}🔶 IMPORTANT: copy-paste your IPs from your LOCAL terminal output.${NC}"
+    echo -e "${YELLOW}If you lost them, you can re-check from your local machine with:${NC}"
+    echo -e "${YELLOW}  • IPv4: curl -4 ifconfig.me${NC}"
+    echo -e "${YELLOW}  • IPv6: curl -6 ifconfig.me${NC}"
+    echo ""
+fi
 
 user_public_ipv4=""
 user_public_ipv6=""

@@ -84,7 +84,7 @@ curl -O https://raw.githubusercontent.com/punkyard/firstb00t/main/firstb00t.sh &
 - download and run the setup script:
   ```bash
   cd /home
-  wget https://raw.githubusercontent.com/punkyard/firstb00t/main/github/setup/debian.sh
+  wget https://raw.githubusercontent.com/punkyard/firstb00t/main/setup/debian.sh
   bash debian.sh
   ```
 - script performs early system preparation (apt update, sudo user creation)

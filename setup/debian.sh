@@ -142,8 +142,8 @@ else
     chmod 440 "/etc/sudoers.d/${ADMIN_USER}"
     echo -e "${GREEN}✅ admin user '$ADMIN_USER' created${NC}"
     log_action "info: admin user $ADMIN_USER created"
-    # expire password so admin must set one on first login (safe default)
-    passwd -e "$ADMIN_USER" || true
+    # do not expire password here — allow immediate su to continue installation
+    # the admin should set a secure password during or after installation
 fi
 
 # If we haven't already re-exec'd as the admin user, do so now (guarded)

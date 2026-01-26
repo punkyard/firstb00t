@@ -145,8 +145,38 @@ else
     chmod 440 "/etc/sudoers.d/${ADMIN_USER}"
     echo -e "${GREEN}✅ admin user '$ADMIN_USER' created${NC}"
     log_action "info: admin user $ADMIN_USER created"
-    # do not expire password here — allow immediate su to continue installation
-    # the admin should set a secure password during or after installation
+
+    # set admin password: prompt in interactive mode, otherwise generate a random password
+    ADMIN_PASS=""
+    if [[ "${NON_INTERACTIVE}" == "false" ]]; then
+        # interactive: prompt for password (hidden); allow empty to generate random
+        echo -n "Enter password for $ADMIN_USER (leave blank to generate random): "
+        read -rs ADMIN_PASS_INPUT
+        echo
+        ADMIN_PASS="${ADMIN_PASS_INPUT}"
+    fi
+
+    if [ -z "${ADMIN_PASS}" ]; then
+        # create a random strong password
+        ADMIN_PASS=$(tr -dc 'A-Za-z0-9!@#$%_-+=' < /dev/urandom | head -c 24 || echo "$(date +%s)${RANDOM}")
+        echo -e "${YELLOW}ℹ️  Generated password for ${ADMIN_USER}: ${ADMIN_PASS}${NC}"
+        log_action "info: generated admin password for $ADMIN_USER"
+    fi
+
+    # ensure chpasswd exists; if not, install passwd package
+    if ! command -v chpasswd >/dev/null 2>&1; then
+        echo -e "${YELLOW}🔄 Installing password utilities...${NC}"
+        apt-get update -y && apt-get install -y passwd || true
+    fi
+
+    # set the password non-interactively and clear forced-change state
+    if command -v chpasswd >/dev/null 2>&1; then
+        echo "${ADMIN_USER}:${ADMIN_PASS}" | chpasswd || true
+    else
+        # fallback: try interactive passwd (best-effort)
+        echo -e "${YELLOW}⚠️  chpasswd not available; please set password for ${ADMIN_USER} manually${NC}"
+    fi
+    chage -d "$(date +%F)" "$ADMIN_USER" || true
 fi
 
 # If we haven't already re-exec'd as the admin user, do so now (guarded)

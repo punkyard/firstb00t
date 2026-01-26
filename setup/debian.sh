@@ -90,6 +90,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+# provide minimal fallbacks when common/logging.sh isn't available (e.g., single-file download)
+if ! type print_title_frame >/dev/null 2>&1; then
+    print_title_frame() {
+        local icon="$1"; shift
+        local title="$*"
+        printf "\n%s %s\n\n" "$icon" "$title"
+    }
+fi
+if ! type log_action >/dev/null 2>&1; then
+    log_action() {
+        mkdir -p /var/log/firstboot 2>/dev/null || true
+        echo "[$(date -Iseconds)] [$MODULE_NAME] $1" >> "/var/log/firstboot/${MODULE_NAME}.log" 2>/dev/null || true
+    }
+fi
 print_title_frame "🔧" "Debian setup (SSH key + allowlist + modules)"
 echo ""
 

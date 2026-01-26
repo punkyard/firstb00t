@@ -84,9 +84,22 @@ curl -O https://raw.githubusercontent.com/punkyard/firstb00t/main/firstb00t.sh &
 - download and run the setup script:
   ```bash
   cd /home
-  wget https://raw.githubusercontent.com/punkyard/firstb00t/main/setup/debian.sh
+  curl -sSfL https://raw.githubusercontent.com/punkyard/firstb00t/main/setup/debian.sh -o debian.sh
+  chmod +x debian.sh
   bash debian.sh
   ```
+
+  _If `curl` is not available, you can use `wget` instead:_
+  ```bash
+  wget https://raw.githubusercontent.com/punkyard/firstb00t/main/setup/debian.sh -O debian.sh
+  chmod +x debian.sh
+  bash debian.sh
+  ```
+
+  _To install `wget`:_
+  - Debian/Ubuntu: `sudo apt update && sudo apt install wget -y`
+  - macOS: `brew install curl`
+
 - script performs early system preparation (apt update, sudo user creation)
 - switches to sudo user for continued execution
 - **first-time connection:** type `yes` when asked about fingerprint verification

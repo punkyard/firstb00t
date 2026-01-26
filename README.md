@@ -67,7 +67,7 @@ Open a terminal window and open a folder to download the firstb00t script (eg, ~
 
 ```bash
 cd ~/Downloads
-curl -O https://raw.githubusercontent.com/lerez0/firstb00t/main/firstb00t.sh && bash firstb00t.sh
+curl -O https://raw.githubusercontent.com/punkyard/firstb00t/main/firstb00t.sh && bash firstb00t.sh
 ```
 
 ### 🛠️ What happens next
@@ -84,7 +84,7 @@ curl -O https://raw.githubusercontent.com/lerez0/firstb00t/main/firstb00t.sh && 
 - download and run the setup script:
   ```bash
   cd /home
-  wget https://raw.githubusercontent.com/lerez0/firstb00t/main/github/setup/debian.sh
+  wget https://raw.githubusercontent.com/punkyard/firstb00t/main/github/setup/debian.sh
   bash debian.sh
   ```
 - script performs early system preparation (apt update, sudo user creation)

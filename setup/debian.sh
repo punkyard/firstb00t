@@ -23,7 +23,8 @@ NO_MODULES="false"
 SKIP_SSH_HARDENING="false"
 SKIP_KEY="false"
 PROFILE="basic"
-FIRSTBOOT_REEXEC=""
+# FIRSTBOOT_REEXEC is only set when re-exec'ing as the admin user to avoid loops
+# it must NOT be reset here so that re-exec detection works correctly
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -130,8 +131,9 @@ if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
     log_action "info: apt update completed"
 fi
 
-echo -e "${YELLOW}👤 creating admin user...${NC}"
-# Prompt for admin username and create it correctly; default is 'firstb00t'
+if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+    echo -e "${YELLOW}👤 creating admin user...${NC}"
+    # Prompt for admin username and create it correctly; default is 'firstb00t'
 DEFAULT_ADMIN="${ADMIN_USER:-firstb00t}"
 read -r -p "admin username [${DEFAULT_ADMIN}]: " ADMIN_USER_INPUT
 ADMIN_USER="${ADMIN_USER_INPUT:-$DEFAULT_ADMIN}"
@@ -191,7 +193,7 @@ if [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
     # Re-run the script as the admin user in interactive mode using sudo (avoids PAM su quirks)
     SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
     exec sudo -u "$ADMIN_USER" env FIRSTBOOT_REEXEC=1 bash -lc "bash \"$SCRIPT_PATH\" --interactive"
-fi
+    fi
 fi
 
 # =======================================================================

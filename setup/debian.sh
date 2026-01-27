@@ -73,8 +73,18 @@ export FIRSTBOOT_NON_INTERACTIVE="${NON_INTERACTIVE}"
 # =======================================================================
 
 log_action() {
-    mkdir -p /var/log/firstboot
-    echo "[$(date -Iseconds)] [$MODULE_NAME] $1" | tee -a "/var/log/firstboot/${MODULE_NAME}.log"
+    # try writing to system log dir; if not writable, fall back to per-user log in $HOME
+    local entry="[$(date -Iseconds)] [$MODULE_NAME] $1"
+    if mkdir -p /var/log/firstboot 2>/dev/null && [ -w /var/log/firstboot ]; then
+        echo "$entry" | tee -a "/var/log/firstboot/${MODULE_NAME}.log" 2>/dev/null || true
+    else
+        # fallback to $HOME or /tmp if HOME is not set or not writable
+        local fallback_dir="${HOME:-/tmp}"
+        if [ ! -w "$fallback_dir" ]; then
+            fallback_dir="/tmp"
+        fi
+        echo "$entry" >> "$fallback_dir/${MODULE_NAME}.log" 2>/dev/null || true
+    fi
 }
 
 handle_error() {
@@ -97,6 +107,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 source "$(dirname "${BASH_SOURCE[0]}")/../common/logging.sh" 2>/dev/null || true
+# if a local fallback helpers file exists in /home/firstb00t, source it (for single-file runs)
+if [ -f /home/firstb00t/firstb00t_fallback.sh ]; then
+    source /home/firstb00t/firstb00t_fallback.sh 2>/dev/null || true
+fi
 # provide minimal fallbacks when common/logging.sh isn't available (e.g., single-file download)
 if ! type print_title_frame >/dev/null 2>&1; then
     print_title_frame() {
@@ -132,53 +146,55 @@ if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
 fi
 
 if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
+if [ "$(id -u)" -eq 0 ] && [ "${FIRSTBOOT_REEXEC:-}" != "1" ]; then
     echo -e "${YELLOW}👤 creating admin user...${NC}"
     # Prompt for admin username and create it correctly; default is 'firstb00t'
-DEFAULT_ADMIN="${ADMIN_USER:-firstb00t}"
-read -r -p "admin username [${DEFAULT_ADMIN}]: " ADMIN_USER_INPUT
-ADMIN_USER="${ADMIN_USER_INPUT:-$DEFAULT_ADMIN}"
+    DEFAULT_ADMIN="${ADMIN_USER:-firstb00t}"
+    read -r -p "admin username [${DEFAULT_ADMIN}]: " ADMIN_USER_INPUT
+    ADMIN_USER="${ADMIN_USER_INPUT:-$DEFAULT_ADMIN}"
 
-if id "$ADMIN_USER" &>/dev/null; then
-    echo -e "${GREEN}✅ admin user '$ADMIN_USER' already exists${NC}"
-    log_action "info: admin user $ADMIN_USER exists"
-else
-    useradd -m -s /bin/bash -G sudo "$ADMIN_USER"
-    echo "$ADMIN_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${ADMIN_USER}"
-    chmod 440 "/etc/sudoers.d/${ADMIN_USER}"
-    echo -e "${GREEN}✅ admin user '$ADMIN_USER' created${NC}"
-    log_action "info: admin user $ADMIN_USER created"
-
-    # set admin password: prompt in interactive mode, otherwise generate a random password
-    ADMIN_PASS=""
-    if [[ "${NON_INTERACTIVE}" == "false" ]]; then
-        # interactive: prompt for password (hidden); allow empty to generate random
-        echo -n "Enter password for $ADMIN_USER (leave blank to generate random): "
-        read -rs ADMIN_PASS_INPUT
-        echo
-        ADMIN_PASS="${ADMIN_PASS_INPUT}"
-    fi
-
-    if [ -z "${ADMIN_PASS}" ]; then
-        # create a random strong password
-        ADMIN_PASS=$(tr -dc 'A-Za-z0-9!@#$%_-+=' < /dev/urandom | head -c 24 || echo "$(date +%s)${RANDOM}")
-        echo -e "${YELLOW}ℹ️  Generated password for ${ADMIN_USER}: ${ADMIN_PASS}${NC}"
-        log_action "info: generated admin password for $ADMIN_USER"
-    fi
-
-    # ensure chpasswd exists; if not, install passwd package
-    if ! command -v chpasswd >/dev/null 2>&1; then
-        echo -e "${YELLOW}🔄 Installing password utilities...${NC}"
-        apt-get update -y && apt-get install -y passwd || true
-    fi
-
-    # set the password non-interactively and clear forced-change state
-    if command -v chpasswd >/dev/null 2>&1; then
-        echo "${ADMIN_USER}:${ADMIN_PASS}" | chpasswd || true
+    if id "$ADMIN_USER" &>/dev/null; then
+        echo -e "${GREEN}✅ admin user '$ADMIN_USER' already exists${NC}"
+        log_action "info: admin user $ADMIN_USER exists"
     else
-        # fallback: try interactive passwd (best-effort)
-        echo -e "${YELLOW}⚠️  chpasswd not available; please set password for ${ADMIN_USER} manually${NC}"
+        useradd -m -s /bin/bash -G sudo "$ADMIN_USER"
+        echo "$ADMIN_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${ADMIN_USER}"
+        chmod 440 "/etc/sudoers.d/${ADMIN_USER}"
+        echo -e "${GREEN}✅ admin user '$ADMIN_USER' created${NC}"
+        log_action "info: admin user $ADMIN_USER created"
+
+        # set admin password: prompt in interactive mode, otherwise generate a random password
+        ADMIN_PASS=""
+        if [[ "${NON_INTERACTIVE}" == "false" ]]; then
+            # interactive: prompt for password (hidden); allow empty to generate random
+            echo -n "Enter password for $ADMIN_USER (leave blank to generate random): "
+            read -rs ADMIN_PASS_INPUT
+            echo
+            ADMIN_PASS="${ADMIN_PASS_INPUT}"
+        fi
+
+        if [ -z "${ADMIN_PASS}" ]; then
+            # create a random strong password
+            ADMIN_PASS=$(tr -dc 'A-Za-z0-9!@#$%_-+=' < /dev/urandom | head -c 24 || echo "$(date +%s)${RANDOM}")
+            echo -e "${YELLOW}ℹ️  Generated password for ${ADMIN_USER}: ${ADMIN_PASS}${NC}"
+            log_action "info: generated admin password for $ADMIN_USER"
+        fi
+
+        # ensure chpasswd exists; if not, install passwd package
+        if ! command -v chpasswd >/dev/null 2>&1; then
+            echo -e "${YELLOW}🔄 Installing password utilities...${NC}"
+            apt-get update -y && apt-get install -y passwd || true
+        fi
+
+        # set the password non-interactively and clear forced-change state
+        if command -v chpasswd >/dev/null 2>&1; then
+            echo "${ADMIN_USER}:${ADMIN_PASS}" | chpasswd || true
+        else
+            # fallback: try interactive passwd (best-effort)
+            echo -e "${YELLOW}⚠️  chpasswd not available; please set password for ${ADMIN_USER} manually${NC}"
+        fi
+        chage -d "$(date +%F)" "$ADMIN_USER" || true
     fi
-    chage -d "$(date +%F)" "$ADMIN_USER" || true
 fi
 
 # If we haven't already re-exec'd as the admin user, do so now (guarded)

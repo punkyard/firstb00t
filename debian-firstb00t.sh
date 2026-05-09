@@ -227,9 +227,15 @@ create_admin_user() {
 	if id "$ADMIN_USER" >/dev/null 2>&1; then
 		ok "User ${ADMIN_USER} exists."
 	else
+		local admin_pass admin_pass_confirm
 		run_cmd "Create user ${ADMIN_USER}" useradd -m -s /bin/bash "$ADMIN_USER"
-		info "Set password for ${ADMIN_USER}"
-		passwd "$ADMIN_USER" < /dev/tty
+		read -r -s -p "Password for ${ADMIN_USER}: " admin_pass < /dev/tty
+		printf '\n'
+		read -r -s -p "Confirm password for ${ADMIN_USER}: " admin_pass_confirm < /dev/tty
+		printf '\n'
+		[[ -n "$admin_pass" ]] || abort "Password empty."
+		[[ "$admin_pass" == "$admin_pass_confirm" ]] || abort "Password mismatch."
+		printf '%s:%s\n' "$ADMIN_USER" "$admin_pass" | chpasswd
 	fi
 
 	run_cmd "Add ${ADMIN_USER} to sudo group" usermod -aG sudo "$ADMIN_USER"

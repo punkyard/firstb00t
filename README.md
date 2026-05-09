@@ -1,38 +1,57 @@
 # firstb00t
 
-Hardening script for fresh servers.
+Hardening script for fresh Linux servers
+linux, bash, debian, server, script, bash-script, firstboot
+
+# 🚧 Work in progress.
 
 ## Purpose
 
-`debian-firstb00t.sh` helps bootstrap and harden a Debian server from a single SSH-launched command, with a short interactive questionnaire and safe defaults.
+These `*-firstb00t.sh` scripts harden Linux servers on their very first boot from a single ssh-command run by `root` or `sudo` user.
 
-## Scope
+## What it does
 
-- Debian-focused first-boot hardening
-- Minimal, auditable shell logic
-- SSH + firewall-first safety model
+1. `apt-get update` → install `sudo`
+2. create sudo admin user → switch to sudo admin user
+3. set hostname + timezone
+4. install `nala`
+5. choose set up a **firewall** (UFW or nftables)
+6. **SSH hardening**: `PermitRootLogin No`, `SSH Port` → reload sshd
+7. install **Fail2Ban**: whitelist admin IP, forever jail attempts on port 22
 
-## Planned behavior (high level)
+**Optional — install only if chosen:**
+8. **FTP** — skip or install and configure
+10. `unattended-upgrades` for ...
+11. AppArmor for ...
+12. rkhunter for
+13. container engine: Docker CE or Podman → set volumes path to `/srv/containers`
 
-1. Root bootstrap (`apt-get update` + install `nala`)
-2. Create sudo admin user
-3. Run remaining install/config prompts through sudo-user workflow
-4. Mandatory firewall setup (UFW default, nftables advanced)
-5. SSH hardening and final SSH-key setup at the end
+14. Add SSH public key for admin user - forever jail attempts without a key
+15. Print summary and test commands
 
-## Container data convention
-
-For predictable remote backups, container bind-mount volumes should live under one root folder, default:
-
-- `/srv/containers`
-
-This is a convention used by this project for operational simplicity.
 
 ## Repository contents
 
 - `debian-firstb00t.sh` — main hardening script
 - `README.md` — project overview
 
-## Status
 
-Work in progress.
+## Quick start
+
+Run this on your server at first boot as root:
+
+```sh
+wget -qO- https://raw.githubusercontent.com/punkyard/firstb00t/main/origin/debian-firstb00t.sh | bash
+```
+
+Requirements:
+
+- Debian server with network access
+- root shell or root SSH login
+- `bash` available (default on Debian)
+
+### Options
+
+1. run the script and answer qestions along
+2. duplicate the .env.sample file and pre-fill your answers to these questions and let the script run automatically
+

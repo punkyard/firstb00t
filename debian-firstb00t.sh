@@ -5,9 +5,9 @@ SCRIPT_NAME="firstb00t"
 SCRIPT_VERSION="0.1.0"
 
 LOG_FILE="/var/log/firstb00t.log"
-TEMP_SUDOERS_FILE=""
+TEMP_SUDOERS_FILE="${TEMP_SUDOERS_FILE:-}"
 
-ADMIN_USER=""
+ADMIN_USER="${ADMIN_USER:-}"
 SSH_PORT="22"
 FIREWALL_BACKEND="ufw"
 FTP_ENABLED="no"
@@ -16,6 +16,7 @@ FTP_USER=""
 FTP_PASSIVE_RANGE="40000:40100"
 CONTAINER_ENGINE="docker"
 CONTAINER_ROOT="/srv/containers"
+SCRIPT_STAGE="${FIRSTB00T_STAGE:-root}"
 
 APT_PACKAGES=(
 	curl wget git build-essential btop ufw fail2ban
@@ -31,7 +32,11 @@ _nc="\033[0m"
 log() {
 	local level="$1"
 	shift
-	printf '%s [%s] %s\n' "$(date '+%F %T')" "$level" "$*" | tee -a "$LOG_FILE"
+	if [[ "${EUID}" -eq 0 ]]; then
+		printf '%s [%s] %s\n' "$(date '+%F %T')" "$level" "$*" | tee -a "$LOG_FILE"
+	else
+		printf '%s [%s] %s\n' "$(date '+%F %T')" "$level" "$*" | sudo tee -a "$LOG_FILE" >/dev/null
+	fi
 }
 
 info() { log "INFO" "$*"; }
@@ -54,7 +59,11 @@ abort() {
 
 cleanup() {
 	if [[ -n "${TEMP_SUDOERS_FILE}" && -f "${TEMP_SUDOERS_FILE}" ]]; then
-		rm -f "${TEMP_SUDOERS_FILE}" || true
+		if [[ "${EUID}" -eq 0 ]]; then
+			rm -f "${TEMP_SUDOERS_FILE}" || true
+		else
+			sudo rm -f "${TEMP_SUDOERS_FILE}" || true
+		fi
 	fi
 }
 
@@ -64,12 +73,39 @@ run_cmd() {
 	local description="$1"
 	shift
 	info "$description"
-	"$@"
+	if [[ "${EUID}" -ne 0 && "${1:-}" != "sudo" ]]; then
+		sudo "$@"
+	else
+		"$@"
+	fi
 }
 
 run_as_admin() {
 	local cmd="$1"
-	run_cmd "Run as ${ADMIN_USER}: ${cmd}" runuser -l "$ADMIN_USER" -c "$cmd"
+	if [[ "${EUID}" -eq 0 ]]; then
+		run_cmd "Run as ${ADMIN_USER}: ${cmd}" runuser -l "$ADMIN_USER" -c "$cmd"
+		return
+	fi
+
+	if [[ "$(id -un)" == "$ADMIN_USER" ]]; then
+		info "Run as ${ADMIN_USER}: ${cmd}"
+		bash -lc "$cmd"
+		return
+	fi
+
+	abort "Not root and not ${ADMIN_USER}; cannot run admin command."
+}
+
+init_log_file() {
+	local log_dir
+	log_dir="$(dirname "$LOG_FILE")"
+	if [[ "${EUID}" -eq 0 ]]; then
+		mkdir -p "$log_dir"
+		touch "$LOG_FILE"
+	else
+		sudo mkdir -p "$log_dir"
+		sudo touch "$LOG_FILE"
+	fi
 }
 
 prompt_input() {
@@ -137,9 +173,14 @@ check_network() {
 	fi
 }
 
-bootstrap_nala() {
+bootstrap_apt() {
 	run_cmd "apt-get update" apt-get update
-	run_cmd "Install bootstrap packages" apt-get install -y nala sudo
+	run_cmd "Install sudo" apt-get install -y sudo
+}
+
+install_nala() {
+	note "Install nala via sudo admin workflow."
+	run_as_admin "sudo apt-get install -y nala"
 }
 
 collect_identity() {
@@ -352,6 +393,29 @@ EOF
 	ok "nftables firewall applied."
 }
 
+append_sshd_option() {
+	local key="$1"
+	local value="$2"
+	local file="/etc/ssh/sshd_config"
+	if ! grep -qE "^\s*${key}\s+${value}\b" "$file"; then
+		printf '%s %s\n' "$key" "$value" >> "$file"
+	fi
+}
+
+get_host_ip() {
+	hostname -I 2>/dev/null | awk '{print $1}' || echo "<server-ip>"
+}
+
+get_admin_ip() {
+	if [[ -n "${SSH_CLIENT:-}" ]]; then
+		printf '%s' "${SSH_CLIENT%% *}"
+	elif [[ -n "${SSH_CONNECTION:-}" ]]; then
+		printf '%s' "${SSH_CONNECTION%% *}"
+	else
+		printf ''
+	fi
+}
+
 set_sshd_option() {
 	local key="$1"
 	local value="$2"
@@ -382,11 +446,58 @@ configure_ssh_hardening() {
 	set_sshd_option "PubkeyAuthentication" "yes"
 	set_sshd_option "AllowUsers" "$ADMIN_USER"
 	set_sshd_option "Port" "$SSH_PORT"
+	if [[ "$SSH_PORT" != "22" ]]; then
+		append_sshd_option "Port" "22"
+		note "Port 22 remains open as honeypot. Admin port set to ${SSH_PORT}."
+	else
+		note "SSH port remains 22. Admin login port set to 22."
+	fi
 
 	run_cmd "Validate sshd config" sshd -t
 	note "Recovery note: if locked out, use VPS console to restore /etc/ssh/sshd_config and restart ssh."
 	run_cmd "Reload SSH daemon" systemctl reload ssh || systemctl restart ssh
+
+	local server_ip
+	server_ip=$(get_host_ip)
+	note "Test login with: ssh ${ADMIN_USER}@${server_ip} -p ${SSH_PORT}"
 	ok "SSH hardening applied."
+}
+
+configure_fail2ban() {
+	run_as_admin "sudo nala install -y fail2ban"
+
+	local admin_ip
+	admin_ip=$(get_admin_ip)
+	if [[ -z "$admin_ip" ]]; then
+		prompt_input admin_ip "Enter admin IP to whitelist for Fail2Ban" ""
+		[[ -n "$admin_ip" ]] || abort "Admin IP required for Fail2Ban whitelist."
+	fi
+
+	note "Fail2Ban will ban failed SSH auth on port 22 and ${SSH_PORT} forever, excluding ${admin_ip}."
+
+	local jailfile="/etc/fail2ban/jail.d/firstb00t.local"
+	local port_list="22"
+	if [[ "$SSH_PORT" != "22" ]]; then
+		port_list="22,${SSH_PORT}"
+	fi
+
+	cat > "$jailfile" <<EOF
+[DEFAULT]
+ignoreip = 127.0.0.1/8 ::1 ${admin_ip}
+bantime  = -1
+findtime = 1
+maxretry = 1
+backend  = systemd
+
+[sshd]
+enabled = true
+port = ${port_list}
+filter = sshd
+logpath = /var/log/auth.log
+EOF
+
+	run_cmd "Enable Fail2Ban" systemctl enable --now fail2ban
+	ok "Fail2Ban configured."
 }
 
 configure_system_services() {
@@ -442,6 +553,8 @@ apply_firewall() {
 }
 
 print_summary() {
+	local server_ip
+	server_ip=$(get_host_ip)
 	cat <<EOF
 
 ========== firstb00t summary ==========
@@ -457,35 +570,67 @@ Container root:     ${CONTAINER_ROOT}
 Log file:           ${LOG_FILE}
 =======================================
 
+Test SSH from admin machine with:
+ssh ${ADMIN_USER}@${server_ip} -p ${SSH_PORT}
+
 Backup note: keep container volumes under ${CONTAINER_ROOT} for easy remote backup.
+Bonus: run btop for live system view, exit with Esc.
 EOF
 }
 
 main() {
-	mkdir -p "$(dirname "$LOG_FILE")"
-	touch "$LOG_FILE"
+	init_log_file
 
 	printf "%b%s%b %s\n" "$_yellow" "$SCRIPT_NAME" "$_nc" "v${SCRIPT_VERSION}"
 	note "This script changes SSH, firewall, packages, and services."
-	prompt_yes_no proceed "Continue now" "yes"
-	[[ "$proceed" == "yes" ]] || abort "Canceled by user."
 
-	require_root
-	require_debian
-	check_network
+	if [[ "$SCRIPT_STAGE" == "root" ]]; then
+		prompt_yes_no proceed "Continue now" "yes"
+		[[ "$proceed" == "yes" ]] || abort "Canceled by user."
 
-	bootstrap_nala
+		require_root
+		require_debian
+		check_network
+
+		# 1. apt-get update -> install sudo
+		bootstrap_apt
+
+		# 2. create sudo admin user
+		create_admin_user
+
+		note "Switching to login shell of ${ADMIN_USER} and continuing script."
+		exec runuser -l "$ADMIN_USER" -c "FIRSTB00T_STAGE=admin ADMIN_USER='${ADMIN_USER}' TEMP_SUDOERS_FILE='${TEMP_SUDOERS_FILE}' LOG_FILE='${LOG_FILE}' bash '$0'"
+	fi
+
+	# 3. set hostname + timezone
 	collect_identity
-	create_admin_user
-	prompt_ftp
+
+	# 4. install nala
+	install_nala
+
+	# 5. choose and apply firewall
 	install_base_packages
-	setup_ftp_if_needed
-	prompt_container_engine
-	install_container_engine
 	prompt_firewall_backend
 	apply_firewall
+
+	# 6. SSH hardening
 	configure_ssh_hardening
+
+	# 7. install Fail2Ban with admin IP whitelist
+	configure_fail2ban
+
+	# 8. optional FTP
+	prompt_ftp
+	setup_ftp_if_needed
+
+	# 10. optional services
 	configure_system_services
+
+	# 13. optional container engine
+	prompt_container_engine
+	install_container_engine
+
+	# 14. add SSH public key for admin user
 	final_ssh_key_setup
 
 	ok "Hardening complete."

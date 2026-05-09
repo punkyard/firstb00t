@@ -171,11 +171,14 @@ require_debian() {
 
 check_network() {
 	note "Need network now for package install."
-	if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
-		ok "Network reachable."
-	else
-		abort "No network."
-	fi
+	local host
+	for host in deb.debian.org security.debian.org; do
+		if bash -c "exec 3<>/dev/tcp/${host}/80" >/dev/null 2>&1; then
+			ok "Network reachable via ${host}."
+			return
+		fi
+	done
+	abort "No network."
 }
 
 bootstrap_apt() {

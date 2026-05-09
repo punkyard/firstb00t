@@ -16,7 +16,6 @@ FTP_USER=""
 FTP_PASSIVE_RANGE="40000:40100"
 CONTAINER_ENGINE="docker"
 CONTAINER_ROOT="/srv/containers"
-SCRIPT_STAGE="${FIRSTB00T_STAGE:-root}"
 
 APT_PACKAGES=(
 	curl wget git build-essential btop ufw fail2ban
@@ -599,23 +598,18 @@ main() {
 	printf "%b%s%b %s\n" "$_yellow" "$SCRIPT_NAME" "$_nc" "v${SCRIPT_VERSION}"
 	note "This script changes SSH, firewall, packages, and services."
 
-	if [[ "$SCRIPT_STAGE" == "root" ]]; then
-		prompt_yes_no proceed "Continue now" "yes"
-		[[ "$proceed" == "yes" ]] || abort "Canceled by user."
+	prompt_yes_no proceed "Continue now" "yes"
+	[[ "$proceed" == "yes" ]] || abort "Canceled by user."
 
-		require_root
-		require_debian
-		check_network
+	require_root
+	require_debian
+	check_network
 
-		# 1. apt-get update -> install sudo
-		bootstrap_apt
+	# 1. apt-get update -> install sudo
+	bootstrap_apt
 
-		# 2. create sudo admin user
-		create_admin_user
-
-		note "Switching to login shell of ${ADMIN_USER} and continuing script."
-		exec runuser -l "$ADMIN_USER" -c "FIRSTB00T_STAGE=admin ADMIN_USER='${ADMIN_USER}' TEMP_SUDOERS_FILE='${TEMP_SUDOERS_FILE}' LOG_FILE='${LOG_FILE}' bash '$0'"
-	fi
+	# 2. create sudo admin user
+	create_admin_user
 
 	# 3. set hostname + timezone
 	collect_identity

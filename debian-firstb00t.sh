@@ -113,12 +113,15 @@ prompt_input() {
 	local prompt="$2"
 	local default_value="${3:-}"
 	local answer
+	local tty=/dev/tty
+
+	[[ -r "$tty" ]] || abort "Interactive prompt requires a TTY. Run script from a shell, not a pipe without terminal."
 
 	if [[ -n "$default_value" ]]; then
-		read -r -p "$prompt [$default_value]: " answer
+		read -r -p "$prompt [$default_value]: " answer < "$tty"
 		answer="${answer:-$default_value}"
 	else
-		read -r -p "$prompt: " answer
+		read -r -p "$prompt: " answer < "$tty"
 	fi
 
 	printf -v "$var_name" '%s' "$answer"
@@ -130,11 +133,13 @@ prompt_yes_no() {
 	local default_value="${3:-yes}"
 	local answer
 	local default_hint="Y/n"
+	local tty=/dev/tty
 
+	[[ -r "$tty" ]] || abort "Interactive prompt requires a TTY. Run script from a shell, not a pipe without terminal."
 	[[ "$default_value" == "no" ]] && default_hint="y/N"
 
 	while true; do
-		read -r -p "$prompt ($default_hint): " answer
+		read -r -p "$prompt ($default_hint): " answer < "$tty"
 		answer="${answer,,}"
 		answer="${answer:-$default_value}"
 		case "$answer" in

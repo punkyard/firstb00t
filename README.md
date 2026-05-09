@@ -41,7 +41,8 @@ These `*-firstb00t.sh` scripts harden Linux servers on their very first boot fro
 Run this on your server at first boot as root:
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/punkyard/firstb00t/main/origin/debian-firstb00t.sh | bash
+# For Debian 10, 11, 12, 13:
+wget -qO- https://raw.githubusercontent.com/punkyard/firstb00t/main/debian-firstb00t.sh | bash
 ```
 
 Requirements:

@@ -200,7 +200,7 @@ collect_identity() {
 	note "Choose timezone now. Reason: correct logs and scheduled jobs."
 	printf '%s\n' "1) Europe/Paris" "2) Europe/London" "3) Europe/Berlin" "4) Europe/Amsterdam" "5) Europe/Madrid" "6) Europe/Rome" "7) Other"
 	local tz_choice
-	read -r -p "Timezone choice [1-7]: " tz_choice
+	read -r -p "Timezone choice [1-7]: " tz_choice < /dev/tty
 	case "$tz_choice" in
 		1) TIMEZONE="Europe/Paris" ;;
 		2) TIMEZONE="Europe/London" ;;
@@ -251,7 +251,7 @@ prompt_ftp() {
 	if [[ "$FTP_ENABLED" == "yes" ]]; then
 		prompt_input FTP_DIR "FTP folder path" "/srv/ftp"
 		prompt_input FTP_USER "FTP username" "ftpuser"
-		read -r -s -p "FTP password: " FTP_PASSWORD
+		read -r -s -p "FTP password: " FTP_PASSWORD < /dev/tty
 		printf '\n'
 		[[ -n "$FTP_PASSWORD" ]] || abort "FTP password empty."
 	fi
@@ -298,7 +298,7 @@ prompt_container_engine() {
 	note "Choose container engine. Reason: install path and hardening differ."
 	printf '%s\n' "1) Hardened Docker (default)" "2) Podman"
 	local choice
-	read -r -p "Container engine [1-2]: " choice
+	read -r -p "Container engine [1-2]: " choice < /dev/tty
 	case "$choice" in
 		2) CONTAINER_ENGINE="podman" ;;
 		*) CONTAINER_ENGINE="docker" ;;
@@ -332,7 +332,7 @@ prompt_firewall_backend() {
 	note "Firewall mandatory. Reason: server must ship locked down in one run."
 	printf '%s\n' "1) UFW (default, simple)" "2) nftables (advanced, more powerful, more complex)"
 	local fw_choice
-	read -r -p "Firewall backend [1-2]: " fw_choice
+	read -r -p "Firewall backend [1-2]: " fw_choice < /dev/tty
 	case "$fw_choice" in
 		2) FIREWALL_BACKEND="nftables" ;;
 		*) FIREWALL_BACKEND="ufw" ;;
@@ -543,7 +543,7 @@ final_ssh_key_setup() {
 	[[ "$add_key" == "yes" ]] || return 0
 
 	local pubkey
-	read -r -p "Paste public key (ssh-ed25519/ssh-rsa ...): " pubkey
+	read -r -p "Paste public key (ssh-ed25519/ssh-rsa ...): " pubkey < /dev/tty
 	[[ "$pubkey" == ssh-* ]] || abort "Invalid public key format."
 
 	local ssh_dir="/home/${ADMIN_USER}/.ssh"

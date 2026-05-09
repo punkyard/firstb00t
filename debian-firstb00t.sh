@@ -228,7 +228,8 @@ create_admin_user() {
 		ok "User ${ADMIN_USER} exists."
 	else
 		run_cmd "Create user ${ADMIN_USER}" useradd -m -s /bin/bash "$ADMIN_USER"
-		run_cmd "Set password for ${ADMIN_USER}" passwd "$ADMIN_USER"
+		info "Set password for ${ADMIN_USER}"
+		passwd "$ADMIN_USER" < /dev/tty
 	fi
 
 	run_cmd "Add ${ADMIN_USER} to sudo group" usermod -aG sudo "$ADMIN_USER"

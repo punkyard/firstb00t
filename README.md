@@ -11,23 +11,34 @@ These `*-firstb00t.sh` scripts harden Linux servers on their very first boot fro
 
 ## What it does
 
-1. `apt-get update` → install `sudo`
-2. create sudo admin user → switch to sudo admin user
+All major steps are prompted (confirm before action) in this order:
+
+0. check root + Debian compatibility (12/13), network check
+1. bootstrap apt: `apt-get update` + install `sudo` + `wget` (installs wget if missing)
+2. create/verify sudo admin user
 3. set hostname + timezone
-4. install `nala`
-5. choose set up a **firewall** (UFW or nftables)
-6. **SSH hardening**: `PermitRootLogin No`, `SSH Port` → reload sshd
-7. install **Fail2Ban**: whitelist admin IP, forever jail attempts on port 22
-
-**Optional — install only if chosen:**
-8. **FTP** — skip or install and configure
-10. `unattended-upgrades` for ...
-11. AppArmor for ...
-12. rkhunter for
-13. container engine: Docker CE or Podman → set volumes path to `/srv/containers`
-
-14. Add SSH public key for admin user - forever jail attempts without a key
-15. Print summary and test commands
+4. install `nala` (then use `nala` for remaining package installs)
+5. install baseline tools (`curl`, `btop`)
+6. firewall + SSH port prompt:
+	- choose backend: UFW or nftables
+	- choose SSH port
+	- optional keep port `22` as honeypot when using custom port
+7. SSH hardening: `PermitRootLogin no`, optional `PasswordAuthentication no`, `AllowUsers`, SSH reload
+8. Fail2Ban setup:
+	- auto-detect SSH client IP for whitelist
+	- prompt for extra whitelist IP/CIDRs (local/public)
+	- forever ban (`bantime=-1`) with whitelist safety net
+9. optional security services:
+	- unattended-upgrades
+	- AppArmor
+	- rkhunter
+10. FTP policy prompt (skip or configure)
+11. optional container engine:
+	- Docker CE (installs `ca-certificates` + `gnupg` only when needed for Docker repo)
+	- or Podman
+	- prompt volume root folder for bind-mounts/backup (default `/mnt/docker/volumes`; Docker images stay in `/var/lib/docker`)
+12. add admin SSH public key (idempotent; no duplicate key lines)
+13. print summary + suggested `btop` usage
 
 
 ## Repository contents
@@ -38,21 +49,21 @@ These `*-firstb00t.sh` scripts harden Linux servers on their very first boot fro
 
 ## Quick start
 
-Run this on your server at first boot as root:
+Run the appropriate command on your server at first boot as root.
 
+For Debian 10, 11, 12, 13:
 ```sh
-# For Debian 10, 11, 12, 13:
 wget -qO- https://raw.githubusercontent.com/punkyard/firstb00t/main/debian-firstb00t.sh | bash
 ```
 
 Requirements:
 
-- Debian server with network access
+- Debian 12 or 13 server with network access
 - root shell or root SSH login
 - `bash` available (default on Debian)
 
 ### Options
 
-1. run the script and answer qestions along
+1. run script and answer prompts step-by-step
 2. duplicate the .env.sample file and pre-fill your answers to these questions and let the script run automatically
 

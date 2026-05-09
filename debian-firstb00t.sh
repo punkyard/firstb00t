@@ -10,16 +10,16 @@ TEMP_SUDOERS_FILE="${TEMP_SUDOERS_FILE:-}"
 ADMIN_USER="${ADMIN_USER:-}"
 SSH_PORT="22"
 FIREWALL_BACKEND="ufw"
+HONEYPOT_22="no"
 FTP_ENABLED="no"
 FTP_DIR="/srv/ftp"
 FTP_USER=""
 FTP_PASSIVE_RANGE="40000:40100"
 CONTAINER_ENGINE="docker"
-CONTAINER_ROOT="/srv/containers"
+CONTAINER_ROOT="/mnt/docker/volumes"
 
 APT_PACKAGES=(
-	curl wget git build-essential btop ufw fail2ban
-	unattended-upgrades trash-cli rsync ca-certificates gnupg
+	curl btop
 )
 
 _green="\033[0;32m"
@@ -80,9 +80,10 @@ run_cmd() {
 }
 
 run_as_admin() {
+	# Uses sudo -u so every action is written to /var/log/auth.log (sudo audit trail).
 	local cmd="$1"
 	if [[ "${EUID}" -eq 0 ]]; then
-		run_cmd "Run as ${ADMIN_USER}: ${cmd}" runuser -l "$ADMIN_USER" -c "$cmd"
+		run_cmd "Run as ${ADMIN_USER}: ${cmd}" sudo -u "$ADMIN_USER" -i bash -lc "$cmd"
 		return
 	fi
 
@@ -168,6 +169,22 @@ require_debian() {
 	[[ "${ID:-}" == "debian" || "${ID_LIKE:-}" == *"debian"* ]] || abort "Debian required."
 }
 
+require_supported_debian_version() {
+	# shellcheck disable=SC1091
+	. /etc/os-release
+	local major
+	major="${VERSION_ID%%.*}"
+	[[ "$major" =~ ^[0-9]+$ ]] || abort "Cannot detect Debian version."
+	(( major >= 12 && major <= 13 )) || abort "Unsupported Debian version ${VERSION_ID:-unknown}. Supported: 12 (bookworm), 13 (trixie). Reason: nala is in official repos only from Debian 12+."
+}
+
+confirm_step() {
+	local step_label="$1"
+	local proceed
+	prompt_yes_no proceed "${step_label}" "yes"
+	[[ "$proceed" == "yes" ]] || abort "Canceled at: ${step_label}"
+}
+
 check_network() {
 	note "Need network now for package install."
 	local host
@@ -182,7 +199,7 @@ check_network() {
 
 bootstrap_apt() {
 	run_cmd "apt-get update" apt-get update
-	run_cmd "Install sudo" apt-get install -y sudo
+	run_cmd "Install sudo + wget" apt-get install -y sudo wget
 }
 
 install_nala() {
@@ -304,7 +321,7 @@ prompt_container_engine() {
 		*) CONTAINER_ENGINE="docker" ;;
 	esac
 
-	prompt_input CONTAINER_ROOT "Container root folder (for all volumes)" "/srv/containers"
+	prompt_input CONTAINER_ROOT "Volume root folder (bind-mounts for backup; Docker images stay in /var/lib/docker)" "/mnt/docker/volumes"
 	run_cmd "Create container root folder" mkdir -p "$CONTAINER_ROOT"
 	run_cmd "Set secure permissions on ${CONTAINER_ROOT}" chmod 0750 "$CONTAINER_ROOT"
 }
@@ -339,6 +356,9 @@ prompt_firewall_backend() {
 	esac
 
 	prompt_input SSH_PORT "SSH port" "22"
+	if [[ "$SSH_PORT" != "22" ]]; then
+		prompt_yes_no HONEYPOT_22 "Keep port 22 as honeypot too" "no"
+	fi
 }
 
 apply_firewall_ufw() {
@@ -347,6 +367,9 @@ apply_firewall_ufw() {
 	run_cmd "UFW default deny incoming" ufw default deny incoming
 	run_cmd "UFW default allow outgoing" ufw default allow outgoing
 	run_cmd "Allow SSH port ${SSH_PORT}" ufw allow "${SSH_PORT}/tcp"
+	if [[ "$HONEYPOT_22" == "yes" && "$SSH_PORT" != "22" ]]; then
+		run_cmd "Allow honeypot SSH port 22" ufw allow 22/tcp
+	fi
 
 	if [[ "$FTP_ENABLED" == "yes" ]]; then
 		run_cmd "Allow FTP control" ufw allow 21/tcp
@@ -376,6 +399,12 @@ table inet filter {
 
 		tcp dport ${SSH_PORT} accept
 EOF
+
+	if [[ "$HONEYPOT_22" == "yes" && "$SSH_PORT" != "22" ]]; then
+		cat >> /etc/nftables.conf <<'EOF'
+		tcp dport 22 accept
+EOF
+	fi
 
 	if [[ "$FTP_ENABLED" == "yes" ]]; then
 		cat >> /etc/nftables.conf <<EOF
@@ -460,9 +489,11 @@ configure_ssh_hardening() {
 	set_sshd_option "PubkeyAuthentication" "yes"
 	set_sshd_option "AllowUsers" "$ADMIN_USER"
 	set_sshd_option "Port" "$SSH_PORT"
-	if [[ "$SSH_PORT" != "22" ]]; then
+	if [[ "$HONEYPOT_22" == "yes" && "$SSH_PORT" != "22" ]]; then
 		append_sshd_option "Port" "22"
-		note "Port 22 remains open as honeypot. Admin port set to ${SSH_PORT}."
+		note "Port 22 open as honeypot. Admin port set to ${SSH_PORT}."
+	elif [[ "$SSH_PORT" != "22" ]]; then
+		note "Admin login port set to ${SSH_PORT}. Port 22 disabled."
 	else
 		note "SSH port remains 22. Admin login port set to 22."
 	fi
@@ -487,20 +518,27 @@ configure_fail2ban() {
 		[[ -n "$admin_ip" ]] || abort "Admin IP required for Fail2Ban whitelist."
 	fi
 
-	note "Fail2Ban will ban failed SSH auth on port 22 and ${SSH_PORT} forever, excluding ${admin_ip}."
+	note "Auto-detected SSH source IP: ${admin_ip}"
+	note "If testing locally now and VPS later, add both local/public IPs or CIDRs."
+	note "Tip: run in another terminal: ipconfig getifaddr en0 (local) and curl -4 ifconfig.me (public)."
+	local extra_ips
+	prompt_input extra_ips "Additional trusted IP/CIDR (space/comma separated, optional)" ""
+	extra_ips="${extra_ips//,/ }"
+
+	note "Fail2Ban bans forever, but whitelist never banned."
 
 	local jailfile="/etc/fail2ban/jail.d/firstb00t.local"
-	local port_list="22"
-	if [[ "$SSH_PORT" != "22" ]]; then
-		port_list="22,${SSH_PORT}"
+	local port_list="$SSH_PORT"
+	if [[ "$HONEYPOT_22" == "yes" && "$SSH_PORT" != "22" ]]; then
+		port_list="${SSH_PORT},22"
 	fi
 
 	cat > "$jailfile" <<EOF
 [DEFAULT]
-ignoreip = 127.0.0.1/8 ::1 ${admin_ip}
+ignoreip = 127.0.0.1/8 ::1 ${admin_ip} ${extra_ips}
 bantime  = -1
 findtime = 1
-maxretry = 1
+maxretry = 3
 backend  = systemd
 
 [sshd]
@@ -550,7 +588,11 @@ final_ssh_key_setup() {
 	local auth_keys="${ssh_dir}/authorized_keys"
 
 	run_cmd "Create ${ssh_dir}" mkdir -p "$ssh_dir"
-	run_cmd "Add key to authorized_keys" bash -c "printf '%s\n' '$pubkey' >> '$auth_keys'"
+	if [[ -f "$auth_keys" ]] && grep -qxF "$pubkey" "$auth_keys"; then
+		ok "SSH key already present for ${ADMIN_USER}."
+	else
+		run_cmd "Add key to authorized_keys" bash -c "printf '%s\n' '$pubkey' >> '$auth_keys'"
+	fi
 	run_cmd "Set SSH permissions" chmod 700 "$ssh_dir"
 	run_cmd "Set authorized_keys permissions" chmod 600 "$auth_keys"
 	run_cmd "Fix ownership on SSH files" chown -R "${ADMIN_USER}:${ADMIN_USER}" "$ssh_dir"
@@ -595,51 +637,63 @@ EOF
 main() {
 	init_log_file
 
+	require_root
+	require_debian
+	require_supported_debian_version
+
 	printf "%b%s%b %s\n" "$_yellow" "$SCRIPT_NAME" "$_nc" "v${SCRIPT_VERSION}"
 	note "This script changes SSH, firewall, packages, and services."
 
-	prompt_yes_no proceed "Continue now" "yes"
-	[[ "$proceed" == "yes" ]] || abort "Canceled by user."
-
-	require_root
-	require_debian
+	confirm_step "Step 0: Continue now"
 	check_network
 
 	# 1. apt-get update -> install sudo
+	confirm_step "Step 1: Bootstrap apt + sudo"
 	bootstrap_apt
 
 	# 2. create sudo admin user
+	confirm_step "Step 2: Create/verify sudo admin user"
 	create_admin_user
 
 	# 3. set hostname + timezone
+	confirm_step "Step 3: Set hostname + timezone"
 	collect_identity
 
 	# 4. install nala
+	confirm_step "Step 4: Install nala"
 	install_nala
 
 	# 5. choose and apply firewall
+	confirm_step "Step 5: Install baseline tools"
 	install_base_packages
+	confirm_step "Step 6: Configure firewall + SSH port"
 	prompt_firewall_backend
 	apply_firewall
 
-	# 6. SSH hardening
+	# 7. SSH hardening
+	confirm_step "Step 7: Apply SSH hardening"
 	configure_ssh_hardening
 
-	# 7. install Fail2Ban with admin IP whitelist
+	# 8. install Fail2Ban with admin IP whitelist
+	confirm_step "Step 8: Configure Fail2Ban whitelist + bans"
 	configure_fail2ban
 
-	# 8. optional FTP
+	# 9. optional security services
+	confirm_step "Step 9: Optional security services"
+	configure_system_services
+
+	# 10. optional FTP
+	confirm_step "Step 10: FTP policy + setup"
 	prompt_ftp
 	setup_ftp_if_needed
 
-	# 10. optional services
-	configure_system_services
-
-	# 13. optional container engine
+	# 11. optional container engine
+	confirm_step "Step 11: Container engine setup"
 	prompt_container_engine
 	install_container_engine
 
-	# 14. add SSH public key for admin user
+	# 12. add SSH public key for admin user
+	confirm_step "Step 12: Add admin SSH public key"
 	final_ssh_key_setup
 
 	ok "Hardening complete."
